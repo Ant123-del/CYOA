@@ -180,3 +180,12 @@ export interface AIMemory {
   notes: MemoryNote[]
   log: { at: string; type: string; date: string | null; text: string }[]
 }
+
+export interface PlanJob {
+  jobId: string
+  date: string
+  status: 'queued' | 'running' | 'done' | 'error'
+  error: string | null
+  notifyEmail: boolean
+  createdAt: string | null
+}

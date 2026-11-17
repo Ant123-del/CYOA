@@ -5,7 +5,8 @@ import { useAuth } from '../lib/auth'
 import { useSleep } from '../lib/sleep'
 import { addDays, fmtTime, isoDate, newId, prettyDate } from '../lib/dates'
 import { SourceTag, KindBadge } from '../components/Adventure'
-import type { Chapter, DayPlan, DaySummary, Option, OptionKind, Priority } from '../types'
+import PlanningScreen from '../components/PlanningScreen'
+import type { Chapter, DayPlan, DaySummary, Option, OptionKind, PlanJob, Priority } from '../types'
 
 const STORYLINE_COLORS = ['#7c5cff', '#16a394', '#e8833a', '#d6457a', '#3b82f6']
 
@@ -45,6 +46,7 @@ export default function Plan() {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [job, setJob] = useState<PlanJob | null>(null)
 
   const weekStart = isoDate()
   const weekDays = Array.from({ length: 8 }, (_, i) => addDays(weekStart, i))
@@ -69,7 +71,50 @@ export default function Plan() {
         setDirty(false)
       })
       .catch((e) => setError(e.message))
+    // If a plan for this day is still being written (e.g. they left and came back), show it.
+    setJob(null)
+    api
+      .activePlanJob(date)
+      .then(setJob)
+      .catch(() => {})
   }, [date])
+
+  // Poll the background planning job until it finishes.
+  const jobId = job && (job.status === 'queued' || job.status === 'running') ? job.jobId : null
+  useEffect(() => {
+    if (!jobId) return
+    let cancelled = false
+    const tick = async () => {
+      try {
+        const j = await api.planJob(jobId)
+        if (cancelled) return
+        if (j.status === 'done') {
+          const p = await api.day(j.date)
+          if (cancelled) return
+          setJob(null)
+          if (p && j.date === date) {
+            setPlan(p)
+            setExists(true)
+            setDirty(false)
+          }
+          setNotice('✨ Your adventure is ready! Open Today to play it, or tweak it below.')
+          loadWeek()
+        } else if (j.status === 'error') {
+          setJob(null)
+          setError(j.error ?? 'Planning failed - please try again.')
+        } else {
+          setJob(j)
+        }
+      } catch {
+        /* network blip - try again on the next tick */
+      }
+    }
+    const t = setInterval(tick, 3000)
+    return () => {
+      cancelled = true
+      clearInterval(t)
+    }
+  }, [jobId, date, loadWeek])
 
   const update = (fn: (p: DayPlan) => DayPlan) => {
     setPlan((p) => fn(structuredClone(p)))
@@ -106,8 +151,9 @@ export default function Plan() {
     if (exists && plan.chapters.length && !confirm('Replace the current plan for this day with a new AI plan?')) return
     setBusy('generate')
     setError(null)
+    setNotice(null)
     try {
-      const p = await api.planDay({
+      const j = await api.planDay({
         date,
         priorities: plan.priorities,
         dayStart: plan.dayStart,
@@ -115,10 +161,10 @@ export default function Plan() {
         useCalendar: useCalendar && Boolean(settings?.googleConnected),
         routes,
       })
-      setPlan(p)
-      setExists(true)
-      setDirty(false)
-      loadWeek()
+      setJob(j)
+      // Start the work without waiting on it: progress comes from polling, and if this
+      // request gets cut off (tab closed), the server's sweeper finishes the job anyway.
+      if (j.status === 'queued') api.runPlanJob(j.jobId).catch(() => {})
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -241,6 +287,13 @@ export default function Plan() {
         </div>
       )}
 
+      {job ? (
+        <PlanningScreen
+          job={job}
+          email={settings?.email ?? 'your email'}
+          onEmail={async () => setJob(await api.emailWhenReady(job.jobId))}
+        />
+      ) : (
       <div className="plan-grid">
         <aside className="panel setup">
           <h2>{prettyDate(date)}</h2>
@@ -395,6 +448,7 @@ export default function Plan() {
           )}
         </section>
       </div>
+      )}
     </div>
   )
 }

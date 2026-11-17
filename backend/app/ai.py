@@ -190,6 +190,9 @@ def _call(output_model: type[BaseModel], user_content: str, max_tokens: int = 16
     raise AIError("No AI key configured: set GEMINI_API_KEY (or ANTHROPIC_API_KEY) for the backend.")
 
 
+GEMINI_MAX_OUTPUT_TOKENS = 65536
+
+
 def _call_gemini(output_model: type[BaseModel], user_content: str, max_tokens: int):
     from google import genai
     from google.genai import errors, types
@@ -204,7 +207,10 @@ def _call_gemini(output_model: type[BaseModel], user_content: str, max_tokens: i
                 system_instruction=SYSTEM_PROMPT,
                 response_mime_type="application/json",
                 response_schema=output_model,
-                max_output_tokens=max_tokens,
+                # Gemini counts its internal thinking against this limit too, so leave lots of room:
+                # a busy day (many events + meals + breaks) easily needs >16k tokens in total.
+                max_output_tokens=GEMINI_MAX_OUTPUT_TOKENS,
+                thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel[s.gemini_thinking_level.upper()]),
             ),
         )
     except errors.ClientError as exc:
@@ -218,14 +224,32 @@ def _call_gemini(output_model: type[BaseModel], user_content: str, max_tokens: i
     except errors.APIError as exc:
         raise AIError(f"AI service error ({exc.code}): {exc.message}") from exc
 
+    usage = response.usage_metadata
+    if usage:
+        log.info(
+            "Gemini %s usage: input=%s (cached=%s) output=%s thinking=%s",
+            output_model.__name__,
+            usage.prompt_token_count,
+            usage.cached_content_token_count,
+            usage.candidates_token_count,
+            usage.thoughts_token_count,
+        )
     parsed = response.parsed
     if isinstance(parsed, output_model):
         return parsed
     try:
         return output_model.model_validate_json(response.text or "")
     except Exception as exc:
-        log.warning("Unparseable Gemini output: %s", (response.text or "")[:500])
-        raise AIError("The AI response was incomplete. Try a shorter day or fewer goals.") from exc
+        cand = (response.candidates or [None])[0]
+        usage = response.usage_metadata
+        log.warning(
+            "Unparseable Gemini output (finish_reason=%s, output_tokens=%s, thinking_tokens=%s): %s",
+            getattr(cand, "finish_reason", None),
+            getattr(usage, "candidates_token_count", None),
+            getattr(usage, "thoughts_token_count", None),
+            (response.text or "")[-300:],
+        )
+        raise AIError("The AI response was incomplete - please try again.") from exc
 
 
 def _call_claude(output_model: type[BaseModel], user_content: str, max_tokens: int):

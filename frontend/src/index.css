@@ -1808,3 +1808,79 @@ label.check.small {
   flex-wrap: wrap;
   min-width: 0;
 }
+
+/* ---------- planning (AI working) screen ---------- */
+.planning-screen {
+  align-items: center;
+  text-align: center;
+  padding: 48px 24px;
+  gap: 12px;
+}
+.big-compass {
+  font-size: 4rem;
+  line-height: 1;
+}
+.planning-step {
+  font-family: var(--display);
+  font-style: italic;
+  font-size: 1.1rem;
+  color: var(--accent);
+  margin: 4px 0;
+  min-height: 1.6em;
+  animation: fade-step 0.5s ease-out;
+}
+@keyframes fade-step {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.indeterminate {
+  width: min(360px, 100%);
+  height: 6px;
+  border-radius: 99px;
+  background: var(--bg-2);
+  overflow: hidden;
+  position: relative;
+}
+.indeterminate div {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--accent), var(--yes-and));
+  animation: slide 1.4s ease-in-out infinite;
+}
+@keyframes slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+.planning-leave {
+  margin-top: 16px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--border);
+  width: min(460px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.planning-leave p {
+  margin: 0;
+}
+.planning-links {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spin,
+  .indeterminate div,
+  .planning-step {
+    animation: none;
+  }
+}

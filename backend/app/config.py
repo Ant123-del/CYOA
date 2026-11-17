@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     # AI: Gemini is used when GEMINI_API_KEY is set, otherwise Claude.
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3.8-flash"
+    gemini_thinking_level: str = "low"  # minimal | low | medium | high - thinking tokens are billed as output
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-opus-5-5"
 

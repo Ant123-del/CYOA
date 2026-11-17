@@ -1,92 +1,67 @@
 import logging
 from datetime import date as date_cls
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from .. import ai, meals, memory
-from .. import google_calendar as gcal
+from .. import ai, memory, plan_jobs
 from ..auth import CurrentUser, current_user, get_user_settings
-from ..models import AIMemory, ChapterOptionsIn, DayPlan, MemoryNoteIn, PlanDayIn, UserSettings
-from ..sleep import ai_context
-from ..timeutil import tz
+from ..models import AIMemory, ChapterOptionsIn, DayPlan, MemoryNoteIn, PlanDayIn
 from .days import load_day, save_day
-from .goals import list_goal_dicts
-from .sleep import summary_for
 
 log = logging.getLogger("cyoa.ai.router")
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 
-def _sleep_context(uid: str, settings: UserSettings) -> dict:
-    try:
-        return ai_context(summary_for(uid, settings), settings.timezone)
-    except Exception:
-        log.exception("Sleep summary failed; planning without it")
-        return {"tracked": False}
+# Shared with the background job runner.
+_sleep_context = plan_jobs.sleep_context
+_open_goals = plan_jobs.open_goals
 
 
-def _open_goals(uid: str, goal_ids: list[str] | None) -> list[dict]:
-    goals = [g for g in list_goal_dicts(uid) if g.get("status") != "done"]
-    if goal_ids is not None:
-        wanted = set(goal_ids)
-        goals = [g for g in goals if g["id"] in wanted]
-    rank = {"high": 0, "medium": 1, "low": 2}
-    return sorted(goals, key=lambda g: (rank.get(g.get("priority"), 1), g.get("dueDate") or "9999"))[:60]
-
-
-@router.post("/plan-day", response_model=DayPlan)
+@router.post("/plan-day")
 def plan_day(body: PlanDayIn, user: CurrentUser = Depends(current_user)):
-    """Generate (and save) a branching plan for a day from goals + priorities + calendar."""
-    settings = get_user_settings(user)
+    """Start planning a day in the background. Returns a job to poll; the user may leave
+    the page and will be emailed when the plan is ready."""
+    get_user_settings(user)  # ensure the user doc exists
     try:
-        weekday = date_cls.fromisoformat(body.date).strftime("%A")
+        date_cls.fromisoformat(body.date)
     except ValueError as exc:
         raise HTTPException(400, "Date must be YYYY-MM-DD") from exc
+    if len(body.priorities) > 4000:
+        raise HTTPException(400, "Priorities are too long")
+    return plan_jobs.create_job(user.uid, body)
 
-    events: list[dict] = []
-    if body.useCalendar:
-        try:
-            events = [e for e in gcal.list_events(user.uid, body.date, settings.timezone) if not e["createdByCyoa"]]
-        except gcal.CalendarNotConnected:
-            events = []
-        except Exception:
-            log.exception("Calendar fetch failed; planning without it")
 
-    sleep_ctx = _sleep_context(user.uid, settings)
-    windows = meals.meal_windows(settings, body.dayStart, body.dayEnd, sleep_ctx.get("woke_at_local"), body.date)
-    try:
-        plan, learned = ai.plan_day(
-            date=body.date,
-            weekday=weekday,
-            timezone=settings.timezone,
-            priorities=body.priorities,
-            day_start=body.dayStart,
-            day_end=body.dayEnd,
-            goals=_open_goals(user.uid, body.goalIds),
-            events=events,
-            routes=body.routes,
-            sleep=sleep_ctx,
-            is_today=body.date == datetime.now(tz(settings.timezone)).date().isoformat(),
-            memory=memory.context_for(user.uid, body.date),
-            meals=windows,
-            meal_notes=settings.mealNotes,
-        )
-    except ai.AIError as exc:
-        raise HTTPException(502, str(exc)) from exc
-    added = meals.ensure_meals(plan, windows)  # safety net: every meal is guaranteed
-    if added:
-        log.info("Meal safety net for %s on %s: %s", user.uid, body.date, "; ".join(added))
-    saved = save_day(user.uid, plan, settings)
-    memory.record(
-        user.uid,
-        kind="plan_day",
-        day=body.date,
-        text=body.priorities or "(planned without stating priorities)",
-        learned=learned.learned,
-        outdated_ids=learned.outdated_note_ids,
-    )
-    return saved
+@router.get("/plan-jobs")
+def active_plan_job(date: str, user: CurrentUser = Depends(current_user)):
+    """The unfinished planning job for a day, if any (so a returning user sees progress)."""
+    return plan_jobs.active_job(user.uid, date)
+
+
+@router.get("/plan-jobs/{job_id}")
+def get_plan_job(job_id: str, user: CurrentUser = Depends(current_user)):
+    job = plan_jobs.get_job(user.uid, job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    return job
+
+
+@router.post("/plan-jobs/{job_id}/run")
+def run_plan_job(job_id: str, user: CurrentUser = Depends(current_user)):
+    """Do the planning now. The page fires this and keeps polling; it's fine if the
+    person leaves - the job finishes, and the sweeper rescues it if it was cut off."""
+    job = plan_jobs.start_job(user.uid, job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    return job
+
+
+@router.post("/plan-jobs/{job_id}/email")
+def email_when_ready(job_id: str, user: CurrentUser = Depends(current_user)):
+    """'Email me when it's ready' - the user is leaving the page."""
+    job = plan_jobs.request_email(user.uid, job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    return job
 
 
 @router.post("/chapter-options", response_model=DayPlan)

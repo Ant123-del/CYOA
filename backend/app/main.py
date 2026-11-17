@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import get_settings
 from .firebase import init_firebase
 from .notifications import process_due_reminders
+from .plan_jobs import sweep_jobs
 from .routers import ai, days, goals, google, me, sleep
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -21,6 +22,7 @@ async def lifespan(app: FastAPI):
     if get_settings().enable_scheduler:
         scheduler = BackgroundScheduler(timezone="UTC")
         scheduler.add_job(process_due_reminders, "interval", seconds=60, id="reminders", max_instances=1, coalesce=True)
+        scheduler.add_job(sweep_jobs, "interval", seconds=60, id="plan-jobs", max_instances=1, coalesce=True)
         scheduler.start()
         log.info("Reminder scheduler started")
     yield

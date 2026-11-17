@@ -2,6 +2,7 @@
 
 - `api`:            the whole FastAPI app as one HTTPS function
 - `send_reminders`: runs every minute (Cloud Scheduler) and emails "time to choose" reminders
+                    and finishes any AI planning job that was never started or got cut off
 
 Local development still uses:  uvicorn app.main:app --reload --port 8000
 """
@@ -11,6 +12,7 @@ from firebase_functions import https_fn, options, scheduler_fn
 
 from app.main import app as fastapi_app
 from app.notifications import process_due_reminders
+from app.plan_jobs import sweep_jobs
 
 # Stored in Google Secret Manager (set by deploy.sh), exposed to the functions as env vars.
 SECRETS = ["GEMINI_API_KEY", "ANTHROPIC_API_KEY", "SMTP_PASSWORD"]
@@ -52,6 +54,8 @@ def api(req: https_fn.Request) -> https_fn.Response:
     return https_fn.Response.from_app(_get_wsgi(), _normalize_path(req.environ))
 
 
-@scheduler_fn.on_schedule(schedule="every 1 minutes", timeout_sec=120, secrets=SECRETS)
+@scheduler_fn.on_schedule(schedule="every 1 minutes", timeout_sec=540, memory=options.MemoryOption.MB_512, secrets=SECRETS)
 def send_reminders(event: scheduler_fn.ScheduledEvent) -> None:
     process_due_reminders()
+    sweep_jobs()
+

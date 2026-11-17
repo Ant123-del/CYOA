@@ -452,11 +452,20 @@ def _fetch_events(cal: dict, start: datetime, end: datetime) -> list[dict]:
     return resp.get("items", [])
 
 
+def _declined(ev: dict, owner_emails: set[str]) -> bool:
+    """True if the person this calendar belongs to RSVP'd "No" to the event."""
+    for a in ev.get("attendees") or []:
+        if a.get("responseStatus") == "declined" and (a.get("self") or (a.get("email") or "").lower() in owner_emails):
+            return True
+    return False
+
+
 def list_events(uid: str, day: str, tz_name: str) -> list[dict]:
     """Events for `day` from every linked calendar that's enabled for planning.
 
     Each event's `id` is "<calendarKey>:<eventId>" so events from different calendars
     never collide; `calendarId` / `calendarName` / `color` say where it came from.
+    Events the user declined ("No" RSVP) are left out - they aren't going.
     """
     cals = linked_calendars(uid)
     if not cals:
@@ -464,6 +473,8 @@ def list_events(uid: str, day: str, tz_name: str) -> list[dict]:
     cals = [c for c in cals if c.get("readEnabled", True)]
     start, end = day_bounds(day, tz_name)
     zone = tz(tz_name)
+    snap = user_ref(uid).get()
+    user_email = ((snap.to_dict() or {}).get("email") or "").lower() if snap.exists else ""
 
     def fetch(cal):
         try:
@@ -481,8 +492,9 @@ def list_events(uid: str, day: str, tz_name: str) -> list[dict]:
             else:
                 log.warning("Could not read %s: %s", cal["calendarId"], exc)
             continue
+        owners = {cal["calendarId"].lower(), user_email} - {""}
         for ev in items:
-            if ev.get("status") == "cancelled":
+            if ev.get("status") == "cancelled" or _declined(ev, owners):
                 continue
             s, e = ev.get("start", {}), ev.get("end", {})
             all_day = "date" in s and "dateTime" not in s

@@ -9,6 +9,7 @@ import type {
   DaySummary,
   Goal,
   GoalInput,
+  PlanJob,
   SleepSummary,
   UserSettings,
 } from '../types'
@@ -79,7 +80,11 @@ export const api = {
     useCalendar: boolean
     routes: number
     goalIds?: string[] | null
-  }) => request<DayPlan>('POST', '/api/ai/plan-day', body),
+  }) => request<PlanJob>('POST', '/api/ai/plan-day', body),
+  activePlanJob: (date: string) => request<PlanJob | null>('GET', `/api/ai/plan-jobs?date=${date}`),
+  planJob: (jobId: string) => request<PlanJob>('GET', `/api/ai/plan-jobs/${jobId}`),
+  runPlanJob: (jobId: string) => request<PlanJob>('POST', `/api/ai/plan-jobs/${jobId}/run`),
+  emailWhenReady: (jobId: string) => request<PlanJob>('POST', `/api/ai/plan-jobs/${jobId}/email`),
   chapterOptions: (date: string, chapterId: string, hint: string) =>
     request<DayPlan>('POST', '/api/ai/chapter-options', { date, chapterId, hint }),
   memory: () => request<AIMemory>('GET', '/api/ai/memory'),
