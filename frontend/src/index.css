@@ -1700,3 +1700,94 @@ label.check input {
     padding: 6px 10px;
   }
 }
+
+/* ---------- settings: multiple calendars ---------- */
+.cal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cal-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.cal-name {
+  flex: 1;
+  min-width: 180px;
+}
+.cal-name .tag {
+  margin-left: 6px;
+}
+.cal-name .muted {
+  word-break: break-all;
+}
+label.check.small {
+  font-size: 0.82rem;
+}
+.add-cal {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border-top: 1px dashed var(--border);
+  padding-top: 14px;
+}
+.row-actions {
+  display: flex;
+  gap: 8px;
+}
+.cal-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--sans);
+}
+.cal-tag .dot {
+  width: 8px;
+  height: 8px;
+}
+.banner.warn-banner {
+  background: color-mix(in srgb, var(--no-and) 16%, transparent);
+  color: color-mix(in srgb, var(--no-and) 75%, var(--text));
+  cursor: default;
+  margin-bottom: 0;
+}
+
+/* ---------- meals & breaks ---------- */
+.meal-tag {
+  background: color-mix(in srgb, var(--no-and) 16%, transparent);
+  color: color-mix(in srgb, var(--no-and) 80%, var(--text));
+}
+.break-tag {
+  background: color-mix(in srgb, var(--yes-and) 16%, transparent);
+  color: color-mix(in srgb, var(--yes-and) 80%, var(--text));
+}
+.meal-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.meal-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.meal-time {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+.meal-time input {
+  width: auto;
+}

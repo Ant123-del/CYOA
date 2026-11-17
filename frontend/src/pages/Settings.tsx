@@ -53,6 +53,8 @@ export default function Settings() {
 
       <CalendarSection onChange={refreshSettings} setMsg={setMsg} />
 
+      <MealsSection settings={settings} patch={patch} />
+
       <section className="panel">
         <h2>✉️ Reminder emails</h2>
         <p className="muted">When a new chapter is about to begin, we email you its paths so you can choose.</p>
@@ -219,10 +221,11 @@ function CalendarSection({
 }) {
   const { settings } = useAuth()
   const [info, setInfo] = useState<CalendarInfo | null>(null)
+  const [adding, setAdding] = useState(false)
   const [calendarId, setCalendarId] = useState('')
   const [code, setCode] = useState<string | null>(null)
   const [hint, setHint] = useState('')
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
 
   useEffect(() => {
@@ -231,6 +234,7 @@ function CalendarSection({
       .then((i) => {
         setInfo(i)
         if (i.pending) {
+          setAdding(true)
           setCalendarId(i.pending.calendarId)
           setCode(i.pending.code)
         }
@@ -238,19 +242,37 @@ function CalendarSection({
       .catch((e) => setMsg({ kind: 'error', text: e.message }))
   }, [setMsg])
 
+  const calendars = info?.calendars ?? []
+  const showForm = adding || calendars.length === 0
+  const full = calendars.length >= (info?.maxCalendars ?? 10)
+
   const copy = async (text: string) => {
     await navigator.clipboard.writeText(text)
     setCopied(text)
     setTimeout(() => setCopied(null), 1500)
   }
 
+  const run = async (key: string, fn: () => Promise<CalendarInfo>) => {
+    setBusy(key)
+    try {
+      setInfo(await fn())
+      await onChange()
+    } catch (e) {
+      setMsg({ kind: 'error', text: (e as Error).message })
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const link = async () => {
-    setBusy(true)
+    setBusy('link')
     setHint('')
     try {
       const r = await api.linkCalendar(calendarId)
       if (r.status === 'linked') {
         setCode(null)
+        setCalendarId('')
+        setAdding(false)
         setMsg({ kind: 'info', text: `Linked “${r.calendarName}” 🎉` })
         setInfo(await api.calendarInfo())
         await onChange()
@@ -262,53 +284,108 @@ function CalendarSection({
     } catch (e) {
       setHint((e as Error).message)
     } finally {
-      setBusy(false)
+      setBusy(null)
     }
-  }
-
-  const unlink = async () => {
-    await api.unlinkCalendar()
-    setInfo(await api.calendarInfo())
-    setCalendarId('')
-    setCode(null)
-    await onChange()
   }
 
   const sa = info?.serviceAccountEmail ?? ''
 
   return (
     <section className="panel">
-      <h2>📅 Google Calendar</h2>
+      <h2>📅 Google Calendars</h2>
       <p className="muted">
-        CYOA reads your schedule to build yes / yes-and / no / no-and chapters, and adds the path you pick to your
-        calendar.
+        Link as many calendars as you like (work, school, family…). CYOA plans around events from the ones marked{' '}
+        <b>Use for planning</b>. Calendars can be <b>view-only</b>: CYOA just needs <b>one editable</b> calendar (your{' '}
+        <b>default</b>) to put the paths you choose on.
       </p>
 
-      {info?.linked ? (
-        <>
-          <div className="linked-cal">
-            <span className="dot" style={{ background: 'var(--yes)' }} />
-            <div>
-              <b>{info.calendarName}</b>
-              <div className="muted small">{info.calendarId}</div>
-            </div>
-          </div>
-          <button className="btn ghost danger small" onClick={unlink}>
-            Unlink
-          </button>
-        </>
-      ) : (
-        <>
+      {calendars.length > 0 && !info?.hasWritable && (
+        <div className="banner warn-banner">
+          None of your calendars can be edited by CYOA, so chosen paths won't be added anywhere. Turn on{' '}
+          <b>Let CYOA add events</b> for one, or link a calendar shared with <b>Make changes to events</b>.
+        </div>
+      )}
+
+      {calendars.length > 0 && (
+        <ul className="cal-list">
+          {calendars.map((c) => (
+            <li key={c.key} className="cal-item">
+              <span className="dot" style={{ background: c.color ?? 'var(--accent)' }} />
+              <div className="cal-name">
+                <b>{c.calendarName}</b>
+                {c.isDefault && <span className="tag">Default · new events go here</span>}
+                {!c.canWrite && <span className="tag subtle">View-only share</span>}
+                {c.canWrite && c.readOnly && <span className="tag subtle">Never edit</span>}
+                <div className="muted small">{c.calendarId}</div>
+              </div>
+              <label className="check small">
+                <input
+                  type="checkbox"
+                  checked={c.readEnabled}
+                  disabled={busy !== null}
+                  onChange={(e) => run(c.key, () => api.updateCalendar(c.key, { readEnabled: e.target.checked }))}
+                />
+                Use for planning
+              </label>
+              <label
+                className="check small"
+                title={
+                  c.canWrite
+                    ? 'Turn off to make sure CYOA never adds or removes events on this calendar'
+                    : "Shared as view-only. Change the share to 'Make changes to events' in Google Calendar and re-link it to allow this."
+                }
+              >
+                <input
+                  type="checkbox"
+                  checked={c.writable}
+                  disabled={busy !== null || !c.canWrite}
+                  onChange={(e) => run(c.key, () => api.updateCalendar(c.key, { readOnly: !e.target.checked }))}
+                />
+                Let CYOA add events
+              </label>
+              {!c.isDefault && c.writable && (
+                <button
+                  className="btn ghost small"
+                  disabled={busy !== null}
+                  onClick={() => run(c.key, () => api.updateCalendar(c.key, { isDefault: true }))}
+                >
+                  Make default
+                </button>
+              )}
+              <button
+                className="btn ghost danger small"
+                disabled={busy !== null}
+                onClick={() => {
+                  if (confirm(`Unlink “${c.calendarName}”? CYOA will stop reading and writing it.`))
+                    run(c.key, () => api.removeCalendar(c.key))
+                }}
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {!showForm && (
+        <button className="btn ghost small" onClick={() => setAdding(true)} disabled={full}>
+          {full ? `Limit of ${info?.maxCalendars} calendars reached` : '+ Add another calendar'}
+        </button>
+      )}
+
+      {showForm && (
+        <div className="add-cal">
           <ol className="steps">
             <li>
               Open{' '}
               <a href="https://calendar.google.com/calendar/r/settings" target="_blank" rel="noreferrer">
                 Google Calendar settings
               </a>{' '}
-              and click your calendar under <b>Settings for my calendars</b>.
+              and click the calendar under <b>Settings for my calendars</b>.
             </li>
             <li>
-              In <b>Share with specific people or groups</b>, add this address with <b>Make changes to events</b>:
+              In <b>Share with specific people or groups</b>, add this address. Pick <b>Make changes to events</b>{' '}
+              if CYOA may add your chosen paths there, or <b>See all event details</b> to keep it view-only:
               <div className="copy-row">
                 <code>{sa || '…'}</code>
                 <button className="btn ghost small" onClick={() => copy(sa)} disabled={!sa}>
@@ -324,7 +401,7 @@ function CalendarSection({
           <label>
             Calendar ID
             <input
-              placeholder={settings?.email || 'you@gmail.com'}
+              placeholder={calendars.length ? 'abc123@group.calendar.google.com' : settings?.email || 'you@gmail.com'}
               value={calendarId}
               onChange={(e) => {
                 setCalendarId(e.target.value)
@@ -349,11 +426,85 @@ function CalendarSection({
             </div>
           )}
           {hint && <p className="error small">{hint}</p>}
-          <button className="btn primary" onClick={link} disabled={busy || !calendarId.trim()}>
-            {busy ? 'Checking…' : code ? 'Verify' : 'Link calendar'}
-          </button>
-        </>
+          <div className="row-actions">
+            <button className="btn primary" onClick={link} disabled={busy !== null || !calendarId.trim()}>
+              {busy === 'link' ? 'Checking…' : code ? 'Verify' : 'Link calendar'}
+            </button>
+            {calendars.length > 0 && (
+              <button
+                className="btn ghost"
+                onClick={() => {
+                  setAdding(false)
+                  setCalendarId('')
+                  setCode(null)
+                  setHint('')
+                }}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </div>
       )}
+    </section>
+  )
+}
+
+function MealsSection({
+  settings,
+  patch,
+}: {
+  settings: UserSettings
+  patch: (p: Partial<UserSettings>) => Promise<void>
+}) {
+  const [notes, setNotes] = useState(settings.mealNotes)
+  const meals = [
+    { label: 'Breakfast', enabled: 'breakfastEnabled', time: 'breakfastTime' },
+    { label: 'Lunch', enabled: 'lunchEnabled', time: 'lunchTime' },
+    { label: 'Dinner', enabled: 'dinnerEnabled', time: 'dinnerTime' },
+  ] as const
+
+  return (
+    <section className="panel">
+      <h2>🍽 Meals</h2>
+      <p className="muted">
+        Every planned day includes the meals you eat, each with a few ways to do it (cook, grab something quick, eat
+        out…) so you still choose. Breakfast follows your wake-up time when sleep is tracked.
+      </p>
+      <div className="meal-rows">
+        {meals.map((m) => (
+          <div key={m.label} className="meal-row">
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={settings[m.enabled]}
+                onChange={(e) => patch({ [m.enabled]: e.target.checked } as Partial<UserSettings>)}
+              />
+              I usually eat {m.label.toLowerCase()}
+            </label>
+            <label className="meal-time">
+              around
+              <input
+                type="time"
+                value={settings[m.time]}
+                disabled={!settings[m.enabled]}
+                onChange={(e) => e.target.value && patch({ [m.time]: e.target.value } as Partial<UserSettings>)}
+              />
+            </label>
+          </div>
+        ))}
+      </div>
+      <label>
+        Food notes for the planner
+        <textarea
+          rows={2}
+          maxLength={300}
+          placeholder="e.g. vegetarian, cook dinner at home most nights, quick lunches on weekdays"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          onBlur={() => notes !== settings.mealNotes && patch({ mealNotes: notes })}
+        />
+      </label>
     </section>
   )
 }

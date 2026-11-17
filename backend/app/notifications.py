@@ -37,8 +37,8 @@ def rebuild_reminders(uid: str, plan: DayPlan, settings: UserSettings) -> None:
     if settings.emailReminders:
         now = datetime.now(UTC)
         for ch in plan.chapters:
-            if ch.chosenOptionId or not ch.options:
-                continue
+            if ch.chosenOptionId or not ch.options or ch.source == "break":
+                continue  # (breaks are short - no email for them)
             send_at = local_dt(plan.date, ch.start, settings.timezone) - timedelta(minutes=settings.reminderLeadMinutes)
             if send_at.astimezone(UTC) < now - timedelta(minutes=1):
                 continue

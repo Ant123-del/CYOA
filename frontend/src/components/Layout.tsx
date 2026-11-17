@@ -35,9 +35,9 @@ export default function Layout() {
         </div>
         <NavLinks className="nav" />
         <div className="user">
-          {settings && !settings.googleConnected && (
+          {settings && (!settings.googleConnected || settings.hasWritableCalendar === false) && (
             <NavLink to="/settings" className="pill warn link-cal">
-              Link calendar
+              {settings.googleConnected ? 'Make a calendar editable' : 'Link calendar'}
             </NavLink>
           )}
           <SleepControl />

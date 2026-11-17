@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import { KIND_LABEL, type Option, type Storyline } from '../types'
+import { KIND_LABEL, type Chapter, type Option, type Storyline } from '../types'
 
 export const KIND_COLOR: Record<string, string> = {
   yes: 'var(--yes)',
@@ -35,5 +35,21 @@ export function StorylineLegend({ storylines }: { storylines: Storyline[] }) {
         </div>
       ))}
     </div>
+  )
+}
+
+export function SourceTag({ chapter }: { chapter: Chapter }) {
+  if (chapter.source === 'calendar') return <CalendarTag chapter={chapter} />
+  if (chapter.source === 'meal') return <span className="tag meal-tag">🍽 Meal</span>
+  if (chapter.source === 'break') return <span className="tag break-tag">☕ Break</span>
+  return null
+}
+
+export function CalendarTag({ chapter }: { chapter: Chapter }) {
+  return (
+    <span className="tag cal-tag" title={chapter.calendarId ?? 'Google Calendar'}>
+      <span className="dot" style={{ background: chapter.calendarColor ?? 'var(--accent)' }} />
+      {chapter.calendarName ?? '📅 calendar'}
+    </span>
   )
 }

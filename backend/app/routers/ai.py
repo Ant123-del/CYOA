@@ -4,7 +4,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from .. import ai, memory
+from .. import ai, meals, memory
 from .. import google_calendar as gcal
 from ..auth import CurrentUser, current_user, get_user_settings
 from ..models import AIMemory, ChapterOptionsIn, DayPlan, MemoryNoteIn, PlanDayIn, UserSettings
@@ -53,6 +53,8 @@ def plan_day(body: PlanDayIn, user: CurrentUser = Depends(current_user)):
         except Exception:
             log.exception("Calendar fetch failed; planning without it")
 
+    sleep_ctx = _sleep_context(user.uid, settings)
+    windows = meals.meal_windows(settings, body.dayStart, body.dayEnd, sleep_ctx.get("woke_at_local"), body.date)
     try:
         plan, learned = ai.plan_day(
             date=body.date,
@@ -64,12 +66,17 @@ def plan_day(body: PlanDayIn, user: CurrentUser = Depends(current_user)):
             goals=_open_goals(user.uid, body.goalIds),
             events=events,
             routes=body.routes,
-            sleep=_sleep_context(user.uid, settings),
+            sleep=sleep_ctx,
             is_today=body.date == datetime.now(tz(settings.timezone)).date().isoformat(),
             memory=memory.context_for(user.uid, body.date),
+            meals=windows,
+            meal_notes=settings.mealNotes,
         )
     except ai.AIError as exc:
         raise HTTPException(502, str(exc)) from exc
+    added = meals.ensure_meals(plan, windows)  # safety net: every meal is guaranteed
+    if added:
+        log.info("Meal safety net for %s on %s: %s", user.uid, body.date, "; ".join(added))
     saved = save_day(user.uid, plan, settings)
     memory.record(
         user.uid,
@@ -100,6 +107,7 @@ def chapter_options(body: ChapterOptionsIn, user: CurrentUser = Depends(current_
             hint=body.hint,
             sleep=_sleep_context(user.uid, settings),
             memory=memory.context_for(user.uid, body.date),
+            meal_notes=settings.mealNotes,
         )
     except ai.AIError as exc:
         raise HTTPException(502, str(exc)) from exc

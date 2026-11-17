@@ -48,7 +48,7 @@ class AIChapter(BaseModel):
     end: str  # HH:MM
     title: str
     priority: Literal["high", "medium", "low"]
-    source: Literal["calendar", "goal", "custom"]
+    source: Literal["calendar", "goal", "custom", "meal", "break"]
     calendar_event_id: str  # "" when not tied to a calendar event
     options: list[AIOption]
 
@@ -88,8 +88,8 @@ How to build the day:
   (moderate energy, keeps momentum), "Side Quest / Pivot" (low energy, errands, or a change
   of scenery). Each storyline should still make progress on the user's priorities.
 - Chapters are time blocks between day_start and day_end, in chronological order, with
-  HH:MM 24-hour times in the user's local timezone. Do not overlap chapters. Leave
-  realistic breaks (meals, transitions). Typical chapter length is 30-120 minutes.
+  HH:MM 24-hour times in the user's local timezone. Do not overlap chapters. Leave a few
+  minutes for transitions. Typical chapter length is 30-90 minutes.
 - Calendar events become chapters with source="calendar" and calendar_event_id set to the
   event id. They MUST offer these four options (one each, in this order):
     * kind="yes":     do the event as planned.
@@ -98,6 +98,9 @@ How to build the day:
     * kind="no_and":  skip it, do an alternative AND something extra (recover the value another way).
   You may add more options with kind="route" if genuinely useful.
   All-day events are context, not chapters (mention them in option details if relevant).
+  Events can come from several of the user's calendars (e.g. Work, Personal, Family); each
+  event's "calendar" field names it. Use it as context (a Work meeting vs a family event
+  deserve different alternatives), and if two calendars hold the same event, make one chapter.
 - Every other chapter (source="goal" or "custom") offers 2-4 options with kind="route",
   ideally one per storyline, all at the same priority level. Pull these from the user's goals
   (put the goal ids in goal_ids) and from their stated priorities.
@@ -107,6 +110,29 @@ How to build the day:
 - Titles are short and actionable (max ~8 words). Details are one or two concrete sentences.
 - duration_minutes is how long that option takes; keep it within the chapter when possible.
 - summary: two or three upbeat sentences describing the shape of the day and its routes.
+
+Meals (the "meals" field) - people need to eat, every day, on every route:
+- Every meal listed in "meals" MUST be its own chapter with source="meal", titled with the
+  meal ("Lunch", "Dinner"...), starting inside its window_start-window_end, as close to
+  preferred_time as the day allows. Lengths: breakfast 15-30 min, lunch 30-60, dinner 30-60.
+  Meals not listed (the person turned them off) don't get a chapter.
+- A meal chapter is still a choice: 2-4 kind="route" options, one per storyline where
+  possible, that are genuinely different ways to eat (cook something proper, quick healthy
+  bite, walk out for food, eat with someone, a planned treat). Fit them to the storyline's
+  spirit and energy. NEVER offer skipping or postponing the meal as an option.
+- Respect meal_notes (diet, habits) in every meal option.
+- If calendar events cover a whole meal window, still eat: put the meal in the nearest free
+  slot just outside it, and make the conflicting event's "no" or "yes_and" option include
+  food explicitly (e.g. "Join camera-off and eat lunch"). Say so in the summary.
+
+Breaks (keep people fresh, without stealing the choice):
+- No more than ~90 minutes of focused work in a row. Either build a 10-15 minute break into
+  the chapter (option duration_minutes shorter than the chapter, and mention the break in
+  the detail) or add a short chapter with source="break" (10-20 min) between long blocks.
+- A break chapter also offers 2-3 kind="route" options (e.g. walk outside, stretch and
+  water, quiet coffee) - different ways to recharge, never "keep working".
+- After back-to-back meetings (60+ minutes with no gap), add a short reset before the next
+  focus block.
 - Use goal ids exactly as given; use [] when an option isn't tied to a goal.
 
 Sleep (the "sleep" field; tracked=false means no data, so plan normally):
@@ -276,6 +302,8 @@ def plan_day(
     sleep: dict | None = None,
     is_today: bool = False,
     memory: dict | None = None,
+    meals: list[dict] | None = None,
+    meal_notes: str = "",
 ) -> tuple[DayPlan, MemoryUpdate]:
     routes = max(2, min(routes, 4))
     context = {
@@ -288,10 +316,13 @@ def plan_day(
         "plan_is_for_today": is_today,
         "sleep": sleep or {"tracked": False},
         "memory": memory or {"first_time": True},
+        "meals": meals or [],
+        "meal_notes": meal_notes or "(none)",
         "user_priorities_for_the_day": priorities or "(none given - infer from goals)",
         "goals": _goal_summary(goals),
         "calendar_events": [
-            {k: e[k] for k in ("id", "summary", "description", "start", "end", "allDay")} for e in events
+            {**{k: e[k] for k in ("id", "summary", "description", "start", "end", "allDay")}, "calendar": e.get("calendarName", "")}
+            for e in events
         ],
     }
     plan: AIPlan = _call(
@@ -309,7 +340,8 @@ def plan_day(
         )
 
     valid_goal_ids = {g["id"] for g in goals}
-    valid_event_ids = {e["id"] for e in events}
+    events_by_id = {e["id"]: e for e in events}
+    valid_event_ids = set(events_by_id)
     chapters = [
         Chapter(
             id=new_id(),
@@ -319,6 +351,9 @@ def plan_day(
             priority=c.priority,
             source=c.source if (c.source != "calendar" or c.calendar_event_id in valid_event_ids) else "custom",
             calendarEventId=c.calendar_event_id if c.calendar_event_id in valid_event_ids else None,
+            calendarId=events_by_id.get(c.calendar_event_id, {}).get("calendarId"),
+            calendarName=events_by_id.get(c.calendar_event_id, {}).get("calendarName"),
+            calendarColor=events_by_id.get(c.calendar_event_id, {}).get("color"),
             options=_convert_options(c.options, key_to_id, valid_goal_ids),
         )
         for c in sorted(plan.chapters, key=lambda c: c.start)
@@ -343,6 +378,7 @@ def regenerate_options(
     hint: str,
     sleep: dict | None = None,
     memory: dict | None = None,
+    meal_notes: str = "",
 ) -> tuple[list[Option], MemoryUpdate]:
     id_to_key = {s.id: f"s{i}" for i, s in enumerate(day.storylines)}
     key_to_id = {v: k for k, v in id_to_key.items()}
@@ -361,14 +397,18 @@ def regenerate_options(
         "other_chapters_today": [f"{c.start}-{c.end} {c.title}" for c in day.chapters if c.id != chapter.id],
         "goals": _goal_summary(goals),
         "user_hint": hint or "(none) - offer fresh alternatives",
+        "meal_notes": meal_notes or "(none)",
         "sleep": sleep or {"tracked": False},
         "memory": memory or {"first_time": True},
     }
-    rule = (
-        "This is a calendar chapter: return exactly the four kinds yes, yes_and, no, no_and (plus optional route)."
-        if chapter.source == "calendar"
-        else "Return 2-4 options with kind='route', one per storyline where possible, same priority."
-    )
+    rules = {
+        "calendar": "This is a calendar chapter: return exactly the four kinds yes, yes_and, no, no_and (plus optional route).",
+        "meal": "This is a meal chapter: return 2-4 kind='route' options that are different ways to eat this meal "
+        "(follow meal_notes); never offer skipping or postponing it.",
+        "break": "This is a break chapter: return 2-3 kind='route' options that are different ways to recharge; "
+        "never 'keep working'.",
+    }
+    rule = rules.get(chapter.source, "Return 2-4 options with kind='route', one per storyline where possible, same priority.")
     result: AIOptionList = _call(
         AIOptionList,
         f"Write new options for ONE chapter of an existing day. {rule}\n\n" + json.dumps(context, indent=2),

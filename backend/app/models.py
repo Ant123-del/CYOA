@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 GoalStatus = Literal["backlog", "todo", "doing", "done"]
 Priority = Literal["high", "medium", "low"]
 OptionKind = Literal["yes", "yes_and", "no", "no_and", "route"]
-ChapterSource = Literal["calendar", "goal", "custom"]
+ChapterSource = Literal["calendar", "goal", "custom", "meal", "break"]
 
 
 # ---------- Goals (the Trello-style board) ----------
@@ -61,11 +61,15 @@ class Chapter(BaseModel):
     title: str
     priority: Priority = "medium"
     source: ChapterSource = "custom"
-    calendarEventId: str | None = None
+    calendarEventId: str | None = None  # "<calendarKey>:<eventId>" for calendar chapters
+    calendarId: str | None = None  # which linked calendar the source event is on
+    calendarName: str | None = None
+    calendarColor: str | None = None
     options: list[Option] = Field(default_factory=list)
     chosenOptionId: str | None = None
     chosenAt: str | None = None
     scheduledEventId: str | None = None
+    scheduledCalendarId: str | None = None  # where CYOA put the chosen path
 
 
 class Storyline(BaseModel):
@@ -105,6 +109,15 @@ class UserSettings(BaseModel):
     calendarId: str = ""
     calendarName: str = ""
     googleConnected: bool = False
+    hasWritableCalendar: bool = False
+    # Meals the planner must fit in (each still offers a choice of how to eat)
+    breakfastEnabled: bool = True
+    breakfastTime: str = "08:00"
+    lunchEnabled: bool = True
+    lunchTime: str = "12:30"
+    dinnerEnabled: bool = True
+    dinnerTime: str = "18:30"
+    mealNotes: str = ""  # e.g. "vegetarian, usually cook dinner at home"
     sleepTargetHours: float = 8.0
 
 
@@ -116,6 +129,13 @@ class UserSettingsPatch(BaseModel):
     # Reminders may only go to the user's own verified sign-in email (checked in the route),
     # so CYOA can't be used to send mail to other people's inboxes.
     notifyEmail: str | None = Field(default=None, max_length=254)
+    breakfastEnabled: bool | None = None
+    breakfastTime: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    lunchEnabled: bool | None = None
+    lunchTime: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    dinnerEnabled: bool | None = None
+    dinnerTime: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    mealNotes: str | None = Field(default=None, max_length=300)
     # No calendarId here on purpose: it can only be set via /api/calendar/link (ownership-checked).
 
 

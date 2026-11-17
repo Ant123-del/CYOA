@@ -90,6 +90,9 @@ export const api = {
   calendarInfo: () => request<CalendarInfo>('GET', '/api/calendar'),
   linkCalendar: (calendarId: string) => request<CalendarLinkResult>('POST', '/api/calendar/link', { calendarId }),
   unlinkCalendar: () => request<{ ok: boolean }>('POST', '/api/calendar/unlink'),
+  updateCalendar: (key: string, patch: { isDefault?: boolean; readEnabled?: boolean; readOnly?: boolean }) =>
+    request<CalendarInfo>('PATCH', `/api/calendar/${key}`, patch),
+  removeCalendar: (key: string) => request<CalendarInfo>('DELETE', `/api/calendar/${key}`),
   sleep: () => request<SleepSummary>('GET', '/api/sleep'),
   sleepStart: (at?: string) => request<SleepSummary>('POST', '/api/sleep/start', { at: at ?? null }),
   sleepCancel: () => request<SleepSummary>('POST', '/api/sleep/cancel'),

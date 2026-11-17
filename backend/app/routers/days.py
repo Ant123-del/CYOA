@@ -91,6 +91,9 @@ def calendar_chapter(ev: dict) -> Chapter:
         title=name,
         source="calendar",
         calendarEventId=ev["id"],
+        calendarId=ev.get("calendarId"),
+        calendarName=ev.get("calendarName"),
+        calendarColor=ev.get("color"),
         options=[
             Option(id=new_id(), kind="yes", title=f"Go: {name}", detail="Stick with the plan.", durationMinutes=mins),
             Option(id=new_id(), kind="yes_and", title=f"{name} + follow-up", detail="Do it, then capture notes / next steps.", durationMinutes=30),
@@ -134,10 +137,10 @@ def choose(day: str, chapter_id: str, body: ChooseIn, user: CurrentUser = Depend
     # Changing your mind: remove the event we created for the previous choice.
     if ch.scheduledEventId:
         try:
-            gcal.delete_event(user.uid, ch.scheduledEventId)
+            gcal.delete_event(user.uid, ch.scheduledEventId, ch.scheduledCalendarId)
         except Exception:
             log.exception("Could not delete previous event")
-        ch.scheduledEventId = None
+        ch.scheduledEventId = ch.scheduledCalendarId = None
 
     wants_event = body.addToCalendar and not (ch.source == "calendar" and opt.kind == "yes")
     if ch.source == "calendar" and opt.kind == "yes":
@@ -157,10 +160,19 @@ def choose(day: str, chapter_id: str, body: ChooseIn, user: CurrentUser = Depend
             filter(None, [opt.detail, f"Chapter: {ch.title}", f"Storyline: {storyline}" if storyline else "", "— chosen in CYOA"])
         )
         try:
-            ch.scheduledEventId = gcal.create_event(
-                user.uid, f"🧭 {opt.title}", description, start, minutes, settings.timezone
+            # Paths for a calendar event go back to that event's calendar; others to the default.
+            ch.scheduledEventId, ch.scheduledCalendarId = gcal.create_event(
+                user.uid,
+                f"🧭 {opt.title}",
+                description,
+                start,
+                minutes,
+                settings.timezone,
+                calendar_id=ch.calendarId if ch.source == "calendar" else None,
             )
             calendar_status = "created"
+        except gcal.NoWritableCalendar:
+            calendar_status = "no_writable"
         except gcal.CalendarNotConnected:
             calendar_status = "not_connected"
         except HttpError as exc:
@@ -184,8 +196,8 @@ def reset_choice(day: str, chapter_id: str, user: CurrentUser = Depends(current_
     ch = _find(plan, chapter_id)
     if ch.scheduledEventId:
         try:
-            gcal.delete_event(user.uid, ch.scheduledEventId)
+            gcal.delete_event(user.uid, ch.scheduledEventId, ch.scheduledCalendarId)
         except Exception:
             log.exception("Could not delete event")
-    ch.chosenOptionId = ch.chosenAt = ch.scheduledEventId = None
+    ch.chosenOptionId = ch.chosenAt = ch.scheduledEventId = ch.scheduledCalendarId = None
     return save_day(user.uid, plan, settings)

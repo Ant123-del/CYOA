@@ -1,7 +1,7 @@
 export type GoalStatus = 'backlog' | 'todo' | 'doing' | 'done'
 export type Priority = 'high' | 'medium' | 'low'
 export type OptionKind = 'yes' | 'yes_and' | 'no' | 'no_and' | 'route'
-export type ChapterSource = 'calendar' | 'goal' | 'custom'
+export type ChapterSource = 'calendar' | 'goal' | 'custom' | 'meal' | 'break'
 
 export interface Goal {
   id: string
@@ -37,6 +37,10 @@ export interface Chapter {
   priority: Priority
   source: ChapterSource
   calendarEventId: string | null
+  calendarId?: string | null
+  calendarName?: string | null
+  calendarColor?: string | null
+  scheduledCalendarId?: string | null
   options: Option[]
   chosenOptionId: string | null
   chosenAt: string | null
@@ -78,6 +82,14 @@ export interface UserSettings {
   calendarId: string
   calendarName: string
   googleConnected: boolean
+  hasWritableCalendar?: boolean
+  breakfastEnabled: boolean
+  breakfastTime: string
+  lunchEnabled: boolean
+  lunchTime: string
+  dinnerEnabled: boolean
+  dinnerTime: string
+  mealNotes: string
   sleepTargetHours: number
 }
 
@@ -121,11 +133,23 @@ export interface CalendarEvent {
   createdByCyoa: boolean
 }
 
-export interface CalendarInfo {
-  serviceAccountEmail: string
-  linked: boolean
+export interface LinkedCalendar {
+  key: string
   calendarId: string
   calendarName: string
+  color: string | null
+  isDefault: boolean
+  readEnabled: boolean
+  canWrite: boolean // shared with "Make changes to events"
+  readOnly: boolean // user chose "never edit"
+  writable: boolean // canWrite && !readOnly
+}
+
+export interface CalendarInfo {
+  serviceAccountEmail: string
+  calendars: LinkedCalendar[]
+  maxCalendars: number
+  hasWritable: boolean
   pending: { calendarId: string; code: string } | null
 }
 

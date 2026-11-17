@@ -4,7 +4,7 @@ import { api, ApiError } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useSleep } from '../lib/sleep'
 import { addDays, fmtTime, isoDate, newId, prettyDate } from '../lib/dates'
-import { KindBadge } from '../components/Adventure'
+import { SourceTag, KindBadge } from '../components/Adventure'
 import type { Chapter, DayPlan, DaySummary, Option, OptionKind, Priority } from '../types'
 
 const STORYLINE_COLORS = ['#7c5cff', '#16a394', '#e8833a', '#d6457a', '#3b82f6']
@@ -294,7 +294,7 @@ export default function Plan() {
               disabled={!settings?.googleConnected}
               onChange={(e) => setUseCalendar(e.target.checked)}
             />
-            Pair with my Google Calendar
+            Pair with my Google Calendars
             {!settings?.googleConnected && (
               <Link to="/settings" className="small-link">
                 connect
@@ -427,7 +427,7 @@ function ChapterEditor({
           {fmtTime(c.start)} – {fmtTime(c.end)}
         </span>
         <span className="chapter-title">{c.title}</span>
-        {c.source === 'calendar' && <span className="tag">📅 calendar</span>}
+        <SourceTag chapter={c} />
         <span className={`tag prio prio-${c.priority}`}>{c.priority}</span>
         <span className="option-dots">
           {c.options.map((o) => (

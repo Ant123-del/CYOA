@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { addDays, fmtTime, isoDate, nowHM, prettyDate } from '../lib/dates'
-import { KindBadge, StorylineLegend, optionColor } from '../components/Adventure'
+import { SourceTag, KindBadge, StorylineLegend, optionColor } from '../components/Adventure'
 import { SleepCard } from '../components/Sleep'
 import type { Chapter, DayPlan } from '../types'
 
@@ -11,6 +11,7 @@ const CAL_MSG: Record<string, string> = {
   created: 'Added to your Google Calendar ✓',
   existing: "It's already on your calendar ✓",
   not_connected: 'Chosen. Link your Google Calendar in Settings to auto-schedule.',
+  no_writable: 'Chosen. Your linked calendars are all view-only - let CYOA edit one in Settings to auto-schedule.',
   skipped: 'Chosen.',
 }
 
@@ -173,7 +174,7 @@ export default function Today() {
                     <div className="tl-head" onClick={() => !isActive && setExpanded(expanded === c.id ? null : c.id)}>
                       <h3>
                         {c.title}
-                        {c.source === 'calendar' && <span className="tag">📅</span>}
+                        <SourceTag chapter={c} />
                       </h3>
                       {isActive && !chosen && <span className="now-pill">{isToday && c.start <= now ? 'Now' : 'Up next'}</span>}
                     </div>
