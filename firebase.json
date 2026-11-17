@@ -1,0 +1,23 @@
+{
+  "functions": [
+    {
+      "source": "backend",
+      "codebase": "default",
+      "runtime": "python314",
+      "ignore": [
+        "venv",
+        ".venv",
+        "__pycache__",
+        ".env.local",
+        ".env.example",
+        "serviceAccountKey.json",
+        "deploy.sh",
+        "tools",
+        "*.log"
+      ]
+    }
+  ],
+  "firestore": {
+    "rules": "firestore.rules"
+  }
+}
