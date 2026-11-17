@@ -7,6 +7,8 @@ A productivity app for days that don't go to plan. You keep a Trello-style board
 
 When a chapter is about to start, you get an email. You pick a path, and it goes on your Google Calendar.
 
+**Sleep:** tap **🌙 Going to sleep** in the top bar before bed (you can cancel it if you don't end up sleeping), then **☀️ Woke up** in the morning, or enter the time you actually woke. CYOA tracks last night's sleep and a 7-night sleep debt against your goal (set in Settings), and suggests a wind-down time and a bedtime. The AI uses this when it plans: on short sleep you get lighter routes, the hard work goes earlier, and the day wraps up in time for bed.
+
 ```
 CYOA/
 ├── frontend/   React + TypeScript (Vite), Firebase Auth (Google sign-in)  → deployed on Vercel
@@ -31,22 +33,33 @@ These are already done: Google sign-in is enabled, the Web app config is in `fro
 
 The service account key is at `backend/serviceAccountKey.json`. It's git-ignored and never deployed, because Cloud Functions uses its own built-in credentials.
 
-### 2. Google Calendar OAuth client
-In [Google Cloud Console](https://console.cloud.google.com/) with project **cyoa-f15a9** selected:
-1. **APIs & Services → Library → enable "Google Calendar API".**
-2. **OAuth consent screen:** set it to External and add your Google account as a **test user**.
-3. **Credentials → Create credentials → OAuth client ID → Web application.**
-   - Authorized JavaScript origins: `http://localhost:5173` and your Vercel URL
-   - Authorized redirect URIs (both):
-     - `http://localhost:8000/api/google/callback`
-     - `https://us-central1-cyoa-f15a9.cloudfunctions.net/api/api/google/callback`
-4. Put the client ID and secret in `backend/.env.local` (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`).
+### 2. Google Calendar (calendar sharing, no OAuth client needed)
+One-time: enable the **Google Calendar API** for the project:
+https://console.cloud.google.com/apis/library/calendar-json.googleapis.com?project=cyoa-f15a9
 
-### 3. Claude API key
-Create a key at https://console.anthropic.com and set `ANTHROPIC_API_KEY` in `backend/.env.local`. The planner uses `claude-opus-5-5`, which you can change with `ANTHROPIC_MODEL`.
+Each user then links their own calendar in **Settings**:
+1. In Google Calendar, go to Settings, pick their calendar, and under **Share with specific people** add `firebase-adminsdk-fbsvc@cyoa-f15a9.iam.gserviceaccount.com` with **Make changes to events**.
+2. Paste the calendar's **Calendar ID** into CYOA. For a main calendar, the ID is the user's Gmail address.
 
-### 4. Email (optional)
-Fill in the `SMTP_*` values in `backend/.env.local`. For production, also copy the non-secret ones (`SMTP_HOST`, `SMTP_USER`, `SMTP_FROM`) into `backend/.env.cyoa-f15a9`. For Gmail: host `smtp.gmail.com`, port `587`, your address as the user, and a Google **App password** as the password. If `SMTP_HOST` is empty, reminder emails are printed in the backend console instead.
+Security rules, enforced in [backend/app/google_calendar.py](backend/app/google_calendar.py):
+- The ID's format is validated.
+- CYOA must actually have write access to the calendar.
+- The user must prove ownership. Either the ID equals their verified sign-in email, or they paste a one-time code into the calendar's Description, which only someone who manages the calendar can edit.
+- The linked ID is stored server-side only, and the settings API can't change it.
+- CYOA only deletes events it created for that same user.
+- Reminder emails only go to the user's own verified address.
+
+### 3. AI key
+Set `GEMINI_API_KEY` in `backend/.env.local`; you can get one at https://aistudio.google.com/apikey. The model is set by `GEMINI_MODEL` (default `gemini-2.5-flash`). If `GEMINI_API_KEY` is empty, the backend uses Claude instead (`ANTHROPIC_API_KEY`, model `claude-opus-5-5`). After changing a key, run `./backend/deploy.sh` again so production gets it.
+
+### 4. Email via Gmail
+Reminders are sent from cyoa740@gmail.com over Gmail SMTP. The host, user and from address are already filled in, in `backend/.env.local` and `backend/.env.cyoa-f15a9`.
+1. Signed in as cyoa740@gmail.com, turn on **2-Step Verification** at https://myaccount.google.com/security.
+2. Create an App Password at https://myaccount.google.com/apppasswords (name it "CYOA").
+3. Put the 16 characters, without spaces, in `backend/.env.local` as `SMTP_PASSWORD=...`.
+4. Run `./backend/deploy.sh`, then use **Settings → Send test email**.
+
+Gmail allows roughly 500 recipients a day. For more, switch the `SMTP_*` values to a transactional provider; no code changes are needed.
 
 ## Run it locally (two terminals)
 
@@ -79,7 +92,7 @@ API docs: http://localhost:8000/docs
    ```bash
    ./backend/deploy.sh
    ```
-   The script copies `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_SECRET` and `SMTP_PASSWORD` from `backend/.env.local` into **Secret Manager**. It then deploys both functions and the Firestore rules. Non-secret production settings live in [backend/.env.cyoa-f15a9](backend/.env.cyoa-f15a9).
+   The script copies `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` and `SMTP_PASSWORD` from `backend/.env.local` into **Secret Manager**. It then deploys both functions and the Firestore rules. Non-secret production settings live in [backend/.env.cyoa-f15a9](backend/.env.cyoa-f15a9).
 4. Check it: https://us-central1-cyoa-f15a9.cloudfunctions.net/api/api/health should return `{"ok":true}`.
 
 Run `./backend/deploy.sh` again after any backend change.
@@ -98,7 +111,6 @@ Run `./backend/deploy.sh` again after any backend change.
    backend/venv/bin/python backend/tools/authorize_domain.py <your-app>.vercel.app
    ```
 3. Put that URL in `FRONTEND_URL` in `backend/.env.cyoa-f15a9` (it defaults to `https://cyoa.vercel.app`) and run `./backend/deploy.sh` again. The backend uses it for CORS, email links and the redirect after connecting Calendar.
-4. Add the Vercel URL to the OAuth client's **Authorized JavaScript origins** (setup step 2).
 
 ## How it works
 
@@ -121,9 +133,8 @@ Events created by CYOA are tagged, so they are never re-imported as new chapters
 ### Firestore layout
 ```
 users/{uid}                       settings (timezone, reminder prefs, calendarId, googleConnected)
-users/{uid}/private/google        Google refresh token (server-only)
+users/{uid}/private/calendar      linked Calendar ID (server-only, ownership-verified)
 users/{uid}/goals/{goalId}        board cards
 users/{uid}/days/{YYYY-MM-DD}     day plan: storylines + chapters + options + choices
 reminders/{uid_date_chapter}      pending reminder emails (sendAt in UTC)
-oauth_states/{state}              short-lived OAuth state + PKCE verifier
 ```

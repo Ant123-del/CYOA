@@ -105,9 +105,9 @@ def import_calendar(day: str, user: CurrentUser = Depends(current_user)):
     """Turn the day's Google Calendar events into yes/yes-and/no/no-and chapters (not saved)."""
     settings = get_user_settings(user)
     try:
-        events = gcal.list_events(user.uid, _validate_date(day), settings.timezone, settings.calendarId)
+        events = gcal.list_events(user.uid, _validate_date(day), settings.timezone)
     except gcal.CalendarNotConnected as exc:
-        raise HTTPException(409, "Google Calendar is not connected") from exc
+        raise HTTPException(409, "No Google Calendar linked") from exc
     return [calendar_chapter(e) for e in events if not e["allDay"] and not e["createdByCyoa"]]
 
 
@@ -134,7 +134,7 @@ def choose(day: str, chapter_id: str, body: ChooseIn, user: CurrentUser = Depend
     # Changing your mind: remove the event we created for the previous choice.
     if ch.scheduledEventId:
         try:
-            gcal.delete_event(user.uid, ch.scheduledEventId, settings.calendarId)
+            gcal.delete_event(user.uid, ch.scheduledEventId)
         except Exception:
             log.exception("Could not delete previous event")
         ch.scheduledEventId = None
@@ -158,7 +158,7 @@ def choose(day: str, chapter_id: str, body: ChooseIn, user: CurrentUser = Depend
         )
         try:
             ch.scheduledEventId = gcal.create_event(
-                user.uid, f"🧭 {opt.title}", description, start, minutes, settings.timezone, settings.calendarId
+                user.uid, f"🧭 {opt.title}", description, start, minutes, settings.timezone
             )
             calendar_status = "created"
         except gcal.CalendarNotConnected:
@@ -184,7 +184,7 @@ def reset_choice(day: str, chapter_id: str, user: CurrentUser = Depends(current_
     ch = _find(plan, chapter_id)
     if ch.scheduledEventId:
         try:
-            gcal.delete_event(user.uid, ch.scheduledEventId, settings.calendarId)
+            gcal.delete_event(user.uid, ch.scheduledEventId)
         except Exception:
             log.exception("Could not delete event")
     ch.chosenOptionId = ch.chosenAt = ch.scheduledEventId = None

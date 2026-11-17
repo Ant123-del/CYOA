@@ -1,12 +1,15 @@
 import { auth } from './firebase'
 import type {
+  AIMemory,
   CalendarEvent,
   CalendarInfo,
+  CalendarLinkResult,
   Chapter,
   DayPlan,
   DaySummary,
   Goal,
   GoalInput,
+  SleepSummary,
   UserSettings,
 } from '../types'
 
@@ -79,9 +82,20 @@ export const api = {
   }) => request<DayPlan>('POST', '/api/ai/plan-day', body),
   chapterOptions: (date: string, chapterId: string, hint: string) =>
     request<DayPlan>('POST', '/api/ai/chapter-options', { date, chapterId, hint }),
+  memory: () => request<AIMemory>('GET', '/api/ai/memory'),
+  addMemoryNote: (text: string) => request<AIMemory>('POST', '/api/ai/memory/notes', { text }),
+  deleteMemoryNote: (id: string) => request<AIMemory>('DELETE', `/api/ai/memory/notes/${id}`),
+  clearMemory: () => request<AIMemory>('DELETE', '/api/ai/memory'),
 
-  googleAuthUrl: () => request<{ url: string }>('GET', '/api/google/auth-url'),
-  googleDisconnect: () => request<{ ok: boolean }>('POST', '/api/google/disconnect'),
-  calendars: () => request<CalendarInfo[]>('GET', '/api/google/calendars'),
-  events: (date: string) => request<CalendarEvent[]>('GET', `/api/google/events?date=${date}`),
+  calendarInfo: () => request<CalendarInfo>('GET', '/api/calendar'),
+  linkCalendar: (calendarId: string) => request<CalendarLinkResult>('POST', '/api/calendar/link', { calendarId }),
+  unlinkCalendar: () => request<{ ok: boolean }>('POST', '/api/calendar/unlink'),
+  sleep: () => request<SleepSummary>('GET', '/api/sleep'),
+  sleepStart: (at?: string) => request<SleepSummary>('POST', '/api/sleep/start', { at: at ?? null }),
+  sleepCancel: () => request<SleepSummary>('POST', '/api/sleep/cancel'),
+  sleepWake: (at?: string) => request<SleepSummary>('POST', '/api/sleep/wake', { at: at ?? null }),
+  sleepLog: (start: string, end: string) => request<SleepSummary>('POST', '/api/sleep/log', { start, end }),
+  sleepDelete: (id: string) => request<SleepSummary>('DELETE', `/api/sleep/${id}`),
+
+  events: (date: string) => request<CalendarEvent[]>('GET', `/api/calendar/events?date=${date}`),
 }

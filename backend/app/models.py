@@ -101,16 +101,64 @@ class UserSettings(BaseModel):
     reminderLeadMinutes: int = 5
     emailReminders: bool = True
     notifyEmail: str = ""
-    calendarId: str = "primary"
+    # Display only - the authoritative linked calendar lives in users/{uid}/private/calendar
+    calendarId: str = ""
+    calendarName: str = ""
     googleConnected: bool = False
+    sleepTargetHours: float = 8.0
 
 
 class UserSettingsPatch(BaseModel):
-    timezone: str | None = None
-    reminderLeadMinutes: int | None = None
+    timezone: str | None = Field(default=None, max_length=64)
+    sleepTargetHours: float | None = Field(default=None, ge=4, le=12)
+    reminderLeadMinutes: int | None = Field(default=None, ge=0, le=240)
     emailReminders: bool | None = None
-    notifyEmail: str | None = None
-    calendarId: str | None = None
+    # Reminders may only go to the user's own verified sign-in email (checked in the route),
+    # so CYOA can't be used to send mail to other people's inboxes.
+    notifyEmail: str | None = Field(default=None, max_length=254)
+    # No calendarId here on purpose: it can only be set via /api/calendar/link (ownership-checked).
+
+
+# ---------- Sleep ----------
+
+SleepStatus = Literal["unknown", "rested", "low", "deprived"]
+
+
+class SleepSession(BaseModel):
+    id: str
+    start: str  # UTC ISO
+    end: str | None = None  # UTC ISO; None while asleep
+    source: Literal["live", "manual"] = "live"
+
+
+class SleepAt(BaseModel):
+    at: str | None = None  # ISO with offset; None = now
+
+
+class SleepLogIn(BaseModel):
+    start: str
+    end: str
+
+
+class SleepSummary(BaseModel):
+    asleep: bool
+    sleepingSince: str | None
+    sessionId: str | None
+    targetHours: float
+    status: SleepStatus
+    lastSleepHours: float | None
+    lastWokeAt: str | None
+    hoursAwake: float | None
+    sleptLast24h: float
+    avgHours7d: float | None
+    debtHours: float
+    nightsTracked: int
+    typicalBedtime: str | None  # HH:MM local
+    typicalWake: str | None
+    wakeAnchor: str  # the wake-up time the bedtime suggestion is based on
+    suggestedBedtime: str
+    windDownAt: str
+    sessions: list[SleepSession]
 
 
 # ---------- AI requests ----------
@@ -130,3 +178,29 @@ class ChapterOptionsIn(BaseModel):
     date: str
     chapterId: str
     hint: str = ""
+
+
+# ---------- AI memory ----------
+
+
+class MemoryNote(BaseModel):
+    id: str
+    text: str
+    source: Literal["user", "ai"] = "ai"
+    createdAt: str | None = None
+
+
+class MemoryLogEntry(BaseModel):
+    at: str
+    type: str
+    date: str | None = None
+    text: str
+
+
+class AIMemory(BaseModel):
+    notes: list[MemoryNote] = Field(default_factory=list)
+    log: list[MemoryLogEntry] = Field(default_factory=list)
+
+
+class MemoryNoteIn(BaseModel):
+    text: str = Field(min_length=1, max_length=280)

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api, ApiError } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useSleep } from '../lib/sleep'
 import { addDays, fmtTime, isoDate, newId, prettyDate } from '../lib/dates'
 import { KindBadge } from '../components/Adventure'
 import type { Chapter, DayPlan, DaySummary, Option, OptionKind, Priority } from '../types'
@@ -30,6 +31,7 @@ const newOption = (kind: OptionKind = 'route', storylineId: string | null = null
 
 export default function Plan() {
   const { settings } = useAuth()
+  const { sleep } = useSleep()
   const [params, setParams] = useSearchParams()
   const date = params.get('date') ?? addDays(isoDate(), 1)
   const setDate = (d: string) => setParams({ date: d })
@@ -149,7 +151,7 @@ export default function Plan() {
       update((p) => ({ ...p, chapters: [...p.chapters, ...fresh].sort((a, b) => a.start.localeCompare(b.start)) }))
       setNotice(fresh.length ? `Imported ${fresh.length} calendar event(s). Remember to save.` : 'No new timed events found.')
     } catch (e) {
-      setError(e instanceof ApiError && e.status === 409 ? 'Connect Google Calendar in Settings first.' : (e as Error).message)
+      setError(e instanceof ApiError && e.status === 409 ? 'Link your Google Calendar in Settings first.' : (e as Error).message)
     } finally {
       setBusy(null)
     }
@@ -264,6 +266,17 @@ export default function Plan() {
               <input type="time" value={plan.dayEnd} onChange={(e) => update((p) => ({ ...p, dayEnd: e.target.value }))} />
             </label>
           </div>
+          {sleep && sleep.windDownAt < plan.dayEnd && sleep.windDownAt > plan.dayStart && (
+            <div className="sleep-hint">
+              <span>
+                💤 To get {sleep.targetHours}h of sleep, wrap up by <b>{fmtTime(sleep.windDownAt)}</b>
+                {sleep.status === 'low' || sleep.status === 'deprived' ? " (you're short on sleep)" : ''}.
+              </span>
+              <button className="btn ghost small" onClick={() => update((p) => ({ ...p, dayEnd: sleep.windDownAt }))}>
+                Use
+              </button>
+            </div>
+          )}
           <label>
             Storylines (routes)
             <div className="seg">

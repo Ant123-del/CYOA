@@ -1,52 +1,41 @@
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import RedirectResponse
+from pydantic import BaseModel, Field
 
 from .. import google_calendar as gcal
 from ..auth import CurrentUser, current_user, get_user_settings
-from ..config import get_settings
 
-router = APIRouter(prefix="/api/google", tags=["google"])
+router = APIRouter(prefix="/api/calendar", tags=["calendar"])
 
 
-@router.get("/auth-url")
-def auth_url(user: CurrentUser = Depends(current_user)):
+class LinkIn(BaseModel):
+    calendarId: str = Field(max_length=2048)  # may be a pasted URL; validated server-side
+
+
+@router.get("")
+def calendar_info(user: CurrentUser = Depends(current_user)):
+    return gcal.info(user.uid)
+
+
+@router.post("/link")
+def link(body: LinkIn, user: CurrentUser = Depends(current_user)):
+    """Link a shared calendar. Returns status "linked", or "verify" with a code to prove ownership."""
+    get_user_settings(user)  # ensure the user doc exists
     try:
-        return {"url": gcal.build_auth_url(user.uid, user.email)}
-    except RuntimeError as exc:
-        raise HTTPException(500, str(exc)) from exc
+        return gcal.link_calendar(user.uid, user.email, user.email_verified, body.calendarId)
+    except gcal.CalendarLinkError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
-@router.get("/callback")
-def callback(state: str = "", code: str = "", error: str = ""):
-    """Google redirects here after consent (no Firebase token - identified by `state`)."""
-    front = get_settings().app_url
-    if error or not code:
-        return RedirectResponse(f"{front}/settings?calendar=error&reason={error or 'missing_code'}")
-    try:
-        gcal.handle_callback(state, code)
-    except Exception as exc:
-        return RedirectResponse(f"{front}/settings?calendar=error&reason={type(exc).__name__}")
-    return RedirectResponse(f"{front}/settings?calendar=connected")
-
-
-@router.post("/disconnect")
-def disconnect(user: CurrentUser = Depends(current_user)):
-    gcal.disconnect(user.uid)
+@router.post("/unlink")
+def unlink(user: CurrentUser = Depends(current_user)):
+    gcal.unlink(user.uid)
     return {"ok": True}
-
-
-@router.get("/calendars")
-def calendars(user: CurrentUser = Depends(current_user)):
-    try:
-        return gcal.list_calendars(user.uid)
-    except gcal.CalendarNotConnected as exc:
-        raise HTTPException(409, "Google Calendar is not connected") from exc
 
 
 @router.get("/events")
 def events(date: str, user: CurrentUser = Depends(current_user)):
     settings = get_user_settings(user)
     try:
-        return gcal.list_events(user.uid, date, settings.timezone, settings.calendarId)
+        return gcal.list_events(user.uid, date, settings.timezone)
     except gcal.CalendarNotConnected as exc:
-        raise HTTPException(409, "Google Calendar is not connected") from exc
+        raise HTTPException(409, "No Google Calendar linked") from exc

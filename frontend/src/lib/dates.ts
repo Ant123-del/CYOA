@@ -35,3 +35,30 @@ export function newId(): string {
 export function browserTimezone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 }
+
+/** Clock time of an ISO timestamp, in the device's timezone. */
+export function fmtClock(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+}
+
+/** "7h 20m" from a number of hours. */
+export function fmtHours(hours: number): string {
+  const total = Math.round(hours * 60)
+  const h = Math.floor(total / 60)
+  const m = total % 60
+  return h ? (m ? `${h}h ${m}m` : `${h}h`) : `${m}m`
+}
+
+/** The most recent moment (not in the future) whose local clock reads HH:MM, as ISO. */
+export function pastTimeToIso(hm: string, now: Date = new Date()): string {
+  const [h, m] = hm.split(':').map(Number)
+  const d = new Date(now)
+  d.setHours(h, m, 0, 0)
+  if (d.getTime() > now.getTime()) d.setDate(d.getDate() - 1)
+  return d.toISOString()
+}
+
+/** Value for <input type="datetime-local"> from a Date. */
+export function toLocalInput(d: Date): string {
+  return `${isoDate(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}

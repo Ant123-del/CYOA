@@ -53,14 +53,26 @@ class AIChapter(BaseModel):
     options: list[AIOption]
 
 
+class AIMemoryUpdate(BaseModel):
+    learned: list[str]  # 0-3 new, durable observations about the person
+    outdated_note_ids: list[str]  # ids of your own notes that are now wrong or superseded
+
+
 class AIPlan(BaseModel):
     summary: str
     storylines: list[AIStoryline]
     chapters: list[AIChapter]
+    memory: AIMemoryUpdate
 
 
 class AIOptionList(BaseModel):
     options: list[AIOption]
+    memory: AIMemoryUpdate
+
+
+class MemoryUpdate(BaseModel):
+    learned: list[str] = []
+    outdated_note_ids: list[str] = []
 
 
 SYSTEM_PROMPT = """You are the planner inside CYOA ("Choose Your Own Adventure"), a productivity app.
@@ -96,18 +108,104 @@ How to build the day:
 - duration_minutes is how long that option takes; keep it within the chapter when possible.
 - summary: two or three upbeat sentences describing the shape of the day and its routes.
 - Use goal ids exactly as given; use [] when an option isn't tied to a goal.
+
+Sleep (the "sleep" field; tracked=false means no data, so plan normally):
+- status is "rested", "low" or "deprived", based on last night vs target_hours and the
+  7-day sleep_debt_hours. Let it shape the day:
+    * rested: plan normally.
+    * low: put the most demanding work in the first few hours after waking, avoid
+      back-to-back deep-focus blocks, and make sure one storyline is clearly low-energy.
+    * deprived: lighter day overall. Fewer, shorter focus blocks; keep high-priority
+      items but give low-effort routes for them; offer a 20-minute rest/nap route in the
+      early afternoon; nothing strenuous or safety-critical late in the day.
+- If plan_is_for_today and woke_at_local is today, don't start chapters before it.
+  hours_awake_now tells you how long they've been up; past ~16 hours, wrap things up.
+- Aim to finish the last chapter by wind_down_at so they can be in bed by
+  suggested_bedtime, even if day_end is later; a calm wind-down route is a good last
+  option. Going to bed at a consistent time matters more than one extra task.
+- When sleep shaped the plan, say so briefly and kindly in the summary.
+
+Memory (the "memory" field) - you are the same planner every day, and you know this person:
+- what_you_know_about_them: notes from earlier sessions. told_by="them" notes are things
+  they told you directly; treat them as firm preferences. told_by="you" are your own
+  observations; trust them but update them when evidence changes.
+- their_recent_requests: what they asked you for recently (priorities, option hints).
+  Notice threads: an unfinished project they keep mentioning, a recurring struggle, a
+  goal they keep pushing back.
+- recent_days: what actually happened - which paths they took (and passed_on), which
+  storylines they favour, and chapters_never_chosen (plans they ignored). patterns
+  summarises this. Learn from it: offer more of what they really pick, at the times they
+  really do it; make ignored kinds of blocks smaller, move them, or reframe them. Don't
+  just repeat yesterday - keep one route that stretches them a little.
+- Build on continuity. If something was skipped repeatedly, give it a better shot today.
+  If they had a big push yesterday, consider a lighter start. Reference the past
+  naturally and briefly in the summary when it helps ("You crushed the Main Quest
+  yesterday, so..."), like a coach who remembers - never creepy, never a recap of data.
+- first_time=true means you're just meeting them: plan from the inputs alone.
+- Fill memory.learned with 0-3 short, durable, third-person observations worth
+  remembering next time (e.g. "Does their best deep work before 11:00",
+  "Usually declines afternoon meetings in favour of async updates",
+  "Training for a half marathon in March"). Only new information; never duplicate an
+  existing note, never record one-off details for a single day, sensitive data
+  (health diagnoses, finances, other people's private info), or anything they'd be
+  surprised you kept. [] is a fine answer.
+- memory.outdated_note_ids: ids of told_by="you" notes contradicted by newer evidence or
+  by something they just said. Usually [].
 """
 
 
-def _client() -> anthropic.Anthropic:
-    key = get_settings().anthropic_api_key
-    return anthropic.Anthropic(api_key=key) if key else anthropic.Anthropic()
-
-
 def _call(output_model: type[BaseModel], user_content: str, max_tokens: int = 16000):
+    """Use Gemini when GEMINI_API_KEY is set, otherwise Claude."""
+    s = get_settings()
+    if s.gemini_api_key:
+        return _call_gemini(output_model, user_content, max_tokens)
+    if s.anthropic_api_key:
+        return _call_claude(output_model, user_content, max_tokens)
+    raise AIError("No AI key configured: set GEMINI_API_KEY (or ANTHROPIC_API_KEY) for the backend.")
+
+
+def _call_gemini(output_model: type[BaseModel], user_content: str, max_tokens: int):
+    from google import genai
+    from google.genai import errors, types
+
+    s = get_settings()
+    client = genai.Client(api_key=s.gemini_api_key)  # keep a reference: the client closes its session when collected
+    try:
+        response = client.models.generate_content(
+            model=s.gemini_model,
+            contents=user_content,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                response_mime_type="application/json",
+                response_schema=output_model,
+                max_output_tokens=max_tokens,
+            ),
+        )
+    except errors.ClientError as exc:
+        if exc.code == 429:
+            raise AIError("The AI is rate limited right now - try again in a minute.") from exc
+        if exc.code == 402:
+            raise AIError("Gemini billing: the API key's prepaid credits are used up. Add credit at https://ai.studio/projects.") from exc
+        if exc.code in (400, 401, 403) and "API key" in (exc.message or ""):
+            raise AIError("GEMINI_API_KEY is invalid.") from exc
+        raise AIError(f"AI request failed ({exc.code}): {exc.message}") from exc
+    except errors.APIError as exc:
+        raise AIError(f"AI service error ({exc.code}): {exc.message}") from exc
+
+    parsed = response.parsed
+    if isinstance(parsed, output_model):
+        return parsed
+    try:
+        return output_model.model_validate_json(response.text or "")
+    except Exception as exc:
+        log.warning("Unparseable Gemini output: %s", (response.text or "")[:500])
+        raise AIError("The AI response was incomplete. Try a shorter day or fewer goals.") from exc
+
+
+def _call_claude(output_model: type[BaseModel], user_content: str, max_tokens: int):
     s = get_settings()
     try:
-        response = _client().beta.messages.parse(
+        response = anthropic.Anthropic(api_key=s.anthropic_api_key).beta.messages.parse(
             model=s.anthropic_model,
             max_tokens=max_tokens,
             betas=["server-side-fallback-2026-07-01"],
@@ -175,7 +273,10 @@ def plan_day(
     goals: list[dict],
     events: list[dict],
     routes: int,
-) -> DayPlan:
+    sleep: dict | None = None,
+    is_today: bool = False,
+    memory: dict | None = None,
+) -> tuple[DayPlan, MemoryUpdate]:
     routes = max(2, min(routes, 4))
     context = {
         "date": date,
@@ -184,6 +285,9 @@ def plan_day(
         "day_start": day_start,
         "day_end": day_end,
         "number_of_storylines": routes,
+        "plan_is_for_today": is_today,
+        "sleep": sleep or {"tracked": False},
+        "memory": memory or {"first_time": True},
         "user_priorities_for_the_day": priorities or "(none given - infer from goals)",
         "goals": _goal_summary(goals),
         "calendar_events": [
@@ -219,7 +323,7 @@ def plan_day(
         )
         for c in sorted(plan.chapters, key=lambda c: c.start)
     ]
-    return DayPlan(
+    day = DayPlan(
         date=date,
         priorities=priorities,
         dayStart=day_start,
@@ -228,9 +332,18 @@ def plan_day(
         storylines=storylines,
         chapters=chapters,
     )
+    return day, MemoryUpdate(**plan.memory.model_dump())
 
 
-def regenerate_options(*, day: DayPlan, chapter: Chapter, goals: list[dict], hint: str) -> list[Option]:
+def regenerate_options(
+    *,
+    day: DayPlan,
+    chapter: Chapter,
+    goals: list[dict],
+    hint: str,
+    sleep: dict | None = None,
+    memory: dict | None = None,
+) -> tuple[list[Option], MemoryUpdate]:
     id_to_key = {s.id: f"s{i}" for i, s in enumerate(day.storylines)}
     key_to_id = {v: k for k, v in id_to_key.items()}
     context = {
@@ -248,6 +361,8 @@ def regenerate_options(*, day: DayPlan, chapter: Chapter, goals: list[dict], hin
         "other_chapters_today": [f"{c.start}-{c.end} {c.title}" for c in day.chapters if c.id != chapter.id],
         "goals": _goal_summary(goals),
         "user_hint": hint or "(none) - offer fresh alternatives",
+        "sleep": sleep or {"tracked": False},
+        "memory": memory or {"first_time": True},
     }
     rule = (
         "This is a calendar chapter: return exactly the four kinds yes, yes_and, no, no_and (plus optional route)."
@@ -259,4 +374,5 @@ def regenerate_options(*, day: DayPlan, chapter: Chapter, goals: list[dict], hin
         f"Write new options for ONE chapter of an existing day. {rule}\n\n" + json.dumps(context, indent=2),
         max_tokens=8000,
     )
-    return _convert_options(result.options, key_to_id, {g["id"] for g in goals})
+    options = _convert_options(result.options, key_to_id, {g["id"] for g in goals})
+    return options, MemoryUpdate(**result.memory.model_dump())

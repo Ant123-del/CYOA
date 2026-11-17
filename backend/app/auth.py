@@ -12,6 +12,7 @@ class CurrentUser:
     uid: str
     email: str
     name: str
+    email_verified: bool = False
 
 
 def current_user(authorization: str | None = Header(default=None)) -> CurrentUser:
@@ -27,6 +28,7 @@ def current_user(authorization: str | None = Header(default=None)) -> CurrentUse
         uid=decoded["uid"],
         email=decoded.get("email", ""),
         name=decoded.get("name", ""),
+        email_verified=bool(decoded.get("email_verified")),
     )
 
 

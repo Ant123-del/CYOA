@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,11 +20,12 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:5173"
     backend_url: str = "http://localhost:8000"
 
-    # Google OAuth client (Web application) used for Google Calendar access
-    google_client_id: str = ""
-    google_client_secret: str = ""
+    # The address users share their Google Calendar with. Defaults to the key file's client_email.
+    calendar_service_account: str = ""
 
-    # Claude
+    # AI: Gemini is used when GEMINI_API_KEY is set, otherwise Claude.
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-3.8-flash"
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-opus-5-5"
 
@@ -38,11 +39,13 @@ class Settings(BaseSettings):
 
     enable_scheduler: bool = True
 
-    @field_validator("anthropic_api_key", "google_client_secret", "smtp_password")
+    @field_validator("gemini_api_key", "anthropic_api_key", "smtp_password")
     @classmethod
-    def _placeholder_is_empty(cls, v: str) -> str:
+    def _placeholder_is_empty(cls, v: str, info: ValidationInfo) -> str:
         # deploy.sh stores "unset" in Secret Manager for empty secrets (it can't store "").
-        return "" if v.strip() == "unset" else v.strip()
+        v = "" if v.strip() == "unset" else v.strip()
+        # Google shows App Passwords as "abcd efgh ijkl mnop"; the real password has no spaces.
+        return v.replace(" ", "") if info.field_name == "smtp_password" else v
 
     @property
     def service_account_path(self) -> Path:
@@ -57,10 +60,6 @@ class Settings(BaseSettings):
     def app_url(self) -> str:
         """Primary frontend URL (for email links and OAuth redirects back to the app)."""
         return self.frontend_origins[0] if self.frontend_origins else "http://localhost:5173"
-
-    @property
-    def google_redirect_uri(self) -> str:
-        return f"{self.backend_url.rstrip('/')}/api/google/callback"
 
 
 @lru_cache

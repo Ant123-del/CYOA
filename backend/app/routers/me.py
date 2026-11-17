@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from fastapi import APIRouter, Depends, HTTPException
 
 from ..auth import CurrentUser, current_user, get_user_settings
 from ..firebase import user_ref
@@ -17,6 +19,15 @@ def get_me(user: CurrentUser = Depends(current_user)):
 @router.patch("/me", response_model=UserSettings)
 def patch_me(patch: UserSettingsPatch, user: CurrentUser = Depends(current_user)):
     get_user_settings(user)  # ensure the doc exists
+    if patch.timezone is not None:
+        try:
+            ZoneInfo(patch.timezone)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise HTTPException(400, "Unknown timezone") from exc
+    if patch.notifyEmail is not None:
+        if not (user.email_verified and patch.notifyEmail.strip().lower() == user.email.lower()):
+            raise HTTPException(400, "Reminders can only be sent to your own verified sign-in email.")
+        patch.notifyEmail = user.email
     user_ref(user.uid).set(patch.model_dump(exclude_none=True), merge=True)
     return get_user_settings(user)
 
@@ -44,6 +55,11 @@ def test_email(user: CurrentUser = Depends(current_user)):
             )
         ],
     )
-    to = settings.notifyEmail or settings.email
-    send_email(to, *chapter_email(demo, demo.chapters[0]))
+    to = user.email if user.email_verified else ""
+    if not to:
+        raise HTTPException(400, "Your account has no verified email.")
+    try:
+        send_email(to, *chapter_email(demo, demo.chapters[0]))
+    except Exception as exc:
+        raise HTTPException(502, f"Email failed: {exc}") from exc
     return {"sentTo": to}

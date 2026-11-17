@@ -4,12 +4,13 @@ import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { addDays, fmtTime, isoDate, nowHM, prettyDate } from '../lib/dates'
 import { KindBadge, StorylineLegend, optionColor } from '../components/Adventure'
+import { SleepCard } from '../components/Sleep'
 import type { Chapter, DayPlan } from '../types'
 
 const CAL_MSG: Record<string, string> = {
   created: 'Added to your Google Calendar ✓',
   existing: "It's already on your calendar ✓",
-  not_connected: 'Chosen. Connect Google Calendar in Settings to auto-schedule.',
+  not_connected: 'Chosen. Link your Google Calendar in Settings to auto-schedule.',
   skipped: 'Chosen.',
 }
 
@@ -130,6 +131,8 @@ export default function Today() {
           {error}
         </div>
       )}
+
+      {isToday && <SleepCard />}
 
       {plan === undefined && <p className="muted">Loading your story…</p>}
 

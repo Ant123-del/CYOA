@@ -76,7 +76,39 @@ export interface UserSettings {
   emailReminders: boolean
   notifyEmail: string
   calendarId: string
+  calendarName: string
   googleConnected: boolean
+  sleepTargetHours: number
+}
+
+export type SleepStatus = 'unknown' | 'rested' | 'low' | 'deprived'
+
+export interface SleepSession {
+  id: string
+  start: string
+  end: string | null
+  source: 'live' | 'manual'
+}
+
+export interface SleepSummary {
+  asleep: boolean
+  sleepingSince: string | null
+  sessionId: string | null
+  targetHours: number
+  status: SleepStatus
+  lastSleepHours: number | null
+  lastWokeAt: string | null
+  hoursAwake: number | null
+  sleptLast24h: number
+  avgHours7d: number | null
+  debtHours: number
+  nightsTracked: number
+  typicalBedtime: string | null
+  typicalWake: string | null
+  wakeAnchor: string
+  suggestedBedtime: string
+  windDownAt: string
+  sessions: SleepSession[]
 }
 
 export interface CalendarEvent {
@@ -90,9 +122,19 @@ export interface CalendarEvent {
 }
 
 export interface CalendarInfo {
-  id: string
-  summary: string
-  primary: boolean
+  serviceAccountEmail: string
+  linked: boolean
+  calendarId: string
+  calendarName: string
+  pending: { calendarId: string; code: string } | null
+}
+
+export interface CalendarLinkResult {
+  status: 'linked' | 'verify'
+  calendarId: string
+  calendarName: string
+  code?: string
+  message?: string
 }
 
 export const KIND_LABEL: Record<OptionKind, string> = {
@@ -101,4 +143,16 @@ export const KIND_LABEL: Record<OptionKind, string> = {
   no: 'No',
   no_and: 'No, and…',
   route: 'Route',
+}
+
+export interface MemoryNote {
+  id: string
+  text: string
+  source: 'user' | 'ai'
+  createdAt: string | null
+}
+
+export interface AIMemory {
+  notes: MemoryNote[]
+  log: { at: string; type: string; date: string | null; text: string }[]
 }

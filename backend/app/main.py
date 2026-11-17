@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import get_settings
 from .firebase import init_firebase
 from .notifications import process_due_reminders
-from .routers import ai, days, goals, google, me
+from .routers import ai, days, goals, google, me, sleep
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("cyoa")
@@ -38,7 +38,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for r in (me.router, goals.router, days.router, google.router, ai.router):
+for r in (me.router, goals.router, days.router, google.router, ai.router, sleep.router):
     app.include_router(r)
 
 
