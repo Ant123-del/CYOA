@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import { KIND_LABEL, type Chapter, type Option, type Storyline } from '../types'
+import { KIND_LABEL, type Chapter, type Option, type Storyline, type Timeline } from '../types'
 
 export const KIND_COLOR: Record<string, string> = {
   yes: 'var(--yes)',
@@ -52,4 +52,39 @@ export function CalendarTag({ chapter }: { chapter: Chapter }) {
       {chapter.calendarName ?? '📅 calendar'}
     </span>
   )
+}
+
+/** "→ Ease in" - the timeline an option leads to (nothing when it stays). */
+export function SwitchTag({ option, timelines }: { option: Option; timelines?: Timeline[] }) {
+  const to = option.nextTimelineId ? timelines?.find((t) => t.id === option.nextTimelineId) : undefined
+  if (!to) return null
+  return (
+    <span className="switch-tag" style={{ '--c': to.color ?? 'var(--accent)' } as CSSProperties} title={to.description}>
+      → {timelineLabel(to)}
+    </span>
+  )
+}
+
+export function TimelineBadge({ timeline }: { timeline?: Timeline | null }) {
+  if (!timeline) return null
+  return (
+    <span
+      className="timeline-badge"
+      style={{ '--c': timeline.color ?? 'var(--accent)' } as CSSProperties}
+      title={timeline.role ? ROLE_LABEL[timeline.role] : undefined}
+    >
+      {timelineLabel(timeline)}
+    </span>
+  )
+}
+
+export const ROLE_ICON: Record<string, string> = { healthy: '🌱', recovery: '🔋', rebel: '🎈' }
+export const ROLE_LABEL: Record<string, string> = { healthy: 'Healthy routine', recovery: 'Catch-up / recovery', rebel: 'Rebel day' }
+export const timelineLabel = (t: Timeline) => `${t.role ? ROLE_ICON[t.role] + ' ' : ''}${t.name}`
+
+/** "Keeps every calendar event" / "No calendar events - your calendar is cleared" */
+export function calendarNote(t: Timeline): string {
+  if (!t.skippedEvents.length) return 'Keeps every calendar event'
+  if (!t.keptEventIds.length) return 'No calendar events - your calendar is cleared for this version'
+  return `Skips: ${t.skippedEvents.join(', ')}`
 }

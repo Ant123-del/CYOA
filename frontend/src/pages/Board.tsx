@@ -160,7 +160,11 @@ export default function Board() {
                     {g.description && <div className="goal-desc">{g.description}</div>}
                     <div className="goal-meta">
                       <span className={`tag prio prio-${g.priority}`}>{PRIORITY_LABEL[g.priority]}</span>
-                      {g.estimateMinutes ? <span className="tag">⏱ {g.estimateMinutes}m</span> : null}
+                      {g.estimateMinutes ? (
+                        <span className="tag" title="Rough total effort - CYOA spreads it over several days">
+                          ⏱ ~{g.estimateMinutes}m total
+                        </span>
+                      ) : null}
                       {g.dueDate ? <span className="tag">📅 {g.dueDate}</span> : null}
                       {g.tags.map((t) => (
                         <span key={t} className="tag subtle">
@@ -241,7 +245,7 @@ export default function Board() {
             </div>
             <div className="row">
               <label>
-                Estimate (minutes)
+                Total effort, roughly (minutes - spread over days)
                 <input
                   type="number"
                   min={0}

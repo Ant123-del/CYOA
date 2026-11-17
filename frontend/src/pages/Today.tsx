@@ -3,7 +3,11 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { addDays, fmtTime, isoDate, nowHM, prettyDate } from '../lib/dates'
-import { SourceTag, KindBadge, StorylineLegend, optionColor } from '../components/Adventure'
+import { SourceTag, KindBadge, StorylineLegend, SwitchTag, TimelineBadge, calendarNote, optionColor } from '../components/Adventure'
+import TimelineMap from '../components/TimelineMap'
+import { currentTimeline, hasTimelines, pathChapters, timelineById } from '../lib/path'
+import StorylineLanes from '../components/StorylineLanes'
+import ViewToggle, { useDayView } from '../components/ViewToggle'
 import { SleepCard } from '../components/Sleep'
 import type { Chapter, DayPlan } from '../types'
 
@@ -26,6 +30,7 @@ export default function Today() {
   const [busy, setBusy] = useState<string | null>(null)
   const [now, setNow] = useState(nowHM())
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [view, setView] = useDayView()
 
   useEffect(() => {
     const t = setInterval(() => setNow(nowHM()), 30_000)
@@ -45,24 +50,31 @@ export default function Today() {
   }, [date])
 
   const isToday = date === isoDate()
+  const branching = plan ? hasTimelines(plan) : false
+  // With timelines, show the person's path (what they chose + what's ahead), not every version.
+  const chapters = useMemo(() => (plan ? pathChapters(plan) : []), [plan])
+  const here = plan ? currentTimeline(plan) : null
 
   // The chapter that needs a decision now: the current one, else the next unchosen one.
   const activeId = useMemo(() => {
     if (!plan) return null
     if (focusId && plan.chapters.some((c) => c.id === focusId)) return focusId
-    if (!isToday) return plan.chapters.find((c) => !c.chosenOptionId)?.id ?? null
-    const current = plan.chapters.find((c) => c.start <= now && now < c.end && !c.chosenOptionId)
+    if (!isToday) return chapters.find((c) => !c.chosenOptionId)?.id ?? null
+    const current = chapters.find((c) => c.start <= now && now < c.end && !c.chosenOptionId)
     if (current) return current.id
-    return plan.chapters.find((c) => c.start >= now && !c.chosenOptionId)?.id ?? null
-  }, [plan, now, isToday, focusId])
+    return chapters.find((c) => c.start >= now && !c.chosenOptionId)?.id ?? null
+  }, [plan, chapters, now, isToday, focusId])
 
   const choose = async (c: Chapter, optionId: string) => {
     setBusy(optionId)
     try {
+      const before = plan?.currentTimelineId
       const res = await api.choose(date, c.id, optionId)
       setPlan(res.plan)
       setExpanded(null)
-      setToast(CAL_MSG[res.calendar] ?? `Chosen. (Calendar: ${res.calendar})`)
+      const moved = res.plan.currentTimelineId && res.plan.currentTimelineId !== before ? timelineById(res.plan, res.plan.currentTimelineId) : null
+      const msg = CAL_MSG[res.calendar] ?? `Chosen. (Calendar: ${res.calendar})`
+      setToast(moved ? `${msg} Your day now follows “${moved.name}”.` : msg)
       if (focusId) setParams({ date })
     } catch (e) {
       setError((e as Error).message)
@@ -90,7 +102,7 @@ export default function Today() {
     return () => clearTimeout(t)
   }, [toast])
 
-  const chosenCount = plan?.chapters.filter((c) => c.chosenOptionId).length ?? 0
+  const chosenCount = chapters.filter((c) => c.chosenOptionId).length
 
   return (
     <div className="page today">
@@ -118,10 +130,10 @@ export default function Today() {
         {plan && (
           <div className="progress">
             <span>
-              {chosenCount}/{plan.chapters.length} chapters chosen
+              {chosenCount}/{chapters.length} chapters chosen
             </span>
             <div className="bar">
-              <div style={{ width: `${plan.chapters.length ? (chosenCount / plan.chapters.length) * 100 : 0}%` }} />
+              <div style={{ width: `${chapters.length ? (chosenCount / chapters.length) * 100 : 0}%` }} />
             </div>
           </div>
         )}
@@ -151,11 +163,47 @@ export default function Today() {
       {plan && (
         <>
           {plan.summary && <p className="summary lead">{plan.summary}</p>}
+          {branching && here && (
+            <div className="here-banner" style={{ '--c': here.color ?? 'var(--accent)' } as CSSProperties}>
+              <div>
+                <span className="muted small">You're on</span> <TimelineBadge timeline={here} />
+              </div>
+              <p>{here.description}</p>
+              <p className="muted small">
+                {calendarNote(here)}.{' '}
+                {(plan.timelines?.length ?? 0) > 1 && 'Options marked → take you onto another version of the day.'}
+              </p>
+            </div>
+          )}
+          <div className="view-row">
+            <ViewToggle
+              view={view}
+              onChange={setView}
+              firstLabel={branching ? 'Your path' : 'Timeline'}
+              secondLabel={branching ? 'All timelines' : 'Storylines'}
+            />
+            <span className="muted small">
+              {view === 'storylines'
+                ? branching
+                  ? 'Every version of your day side by side. Storylines (the colours) weave between them.'
+                  : 'Each column is one route through your day - follow one, or switch whenever you like.'
+                : 'Your day, chapter by chapter.'}
+            </span>
+          </div>
+          {view === 'storylines' ? (
+            branching ? (
+              <TimelineMap plan={plan} busy={busy} onChoose={choose} />
+            ) : (
+              <StorylineLanes plan={plan} activeId={activeId} busy={busy} onChoose={choose} />
+            )
+          ) : (
+            <>
           <StorylineLegend storylines={plan.storylines} />
 
           <ol className="timeline">
-            {plan.chapters.map((c) => {
+            {chapters.map((c) => {
               const chosen = c.options.find((o) => o.id === c.chosenOptionId)
+              const otherTimeline = branching && c.timelineId !== here?.id ? timelineById(plan, c.timelineId) : null
               const isActive = c.id === activeId
               const isPast = isToday && c.end <= now
               const isOpen = isActive || expanded === c.id
@@ -175,6 +223,7 @@ export default function Today() {
                       <h3>
                         {c.title}
                         <SourceTag chapter={c} />
+                        {otherTimeline && <TimelineBadge timeline={otherTimeline} />}
                       </h3>
                       {isActive && !chosen && <span className="now-pill">{isToday && c.start <= now ? 'Now' : 'Up next'}</span>}
                     </div>
@@ -183,6 +232,7 @@ export default function Today() {
                       <div className="chosen-line">
                         <KindBadge option={chosen} storylines={plan.storylines} />
                         <span className="chosen-title">{chosen.title}</span>
+                        <SwitchTag option={chosen} timelines={plan.timelines} />
                         <button className="btn ghost small" onClick={() => reset(c)} disabled={busy === c.id}>
                           Change course
                         </button>
@@ -192,7 +242,10 @@ export default function Today() {
                     {!chosen && !isOpen && (
                       <div className="preview-line">
                         {c.options.map((o) => (
-                          <KindBadge key={o.id} option={o} storylines={plan.storylines} />
+                          <span key={o.id} className="preview-opt">
+                            <KindBadge option={o} storylines={plan.storylines} />
+                            <SwitchTag option={o} timelines={plan.timelines} />
+                          </span>
                         ))}
                       </div>
                     )}
@@ -212,6 +265,7 @@ export default function Today() {
                               <KindBadge option={o} storylines={plan.storylines} />
                               <span className="path-title">{o.title}</span>
                               {o.detail && <span className="path-detail">{o.detail}</span>}
+                              <SwitchTag option={o} timelines={plan.timelines} />
                               <span className="path-foot">
                                 {o.durationMinutes ? `${o.durationMinutes} min` : ''}
                                 <span className="go">{busy === o.id ? 'Scheduling…' : o.id === c.chosenOptionId ? 'Chosen' : 'Choose →'}</span>
@@ -226,6 +280,8 @@ export default function Today() {
               )
             })}
           </ol>
+            </>
+          )}
           <div className="foot-actions">
             <Link className="btn ghost small" to={`/plan?date=${date}`}>
               Edit this day's plan

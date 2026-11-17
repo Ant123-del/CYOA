@@ -139,6 +139,7 @@ def ensure_meals(plan: DayPlan, windows: list[dict]) -> list[str]:
                     title=meal.capitalize(),
                     priority="high",
                     source="meal",
+                    activityId=f"meal:{meal}",
                     options=_options(meal, plan, dur),
                 )
             )

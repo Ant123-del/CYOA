@@ -17,7 +17,9 @@ from datetime import timedelta
 
 from google.cloud.firestore_v1.base_query import FieldFilter
 
+from . import path
 from .firebase import db, user_ref
+from .models import DayPlan
 from .timeutil import new_id, now_iso
 
 log = logging.getLogger("cyoa.memory")
@@ -102,7 +104,16 @@ def _recent_days(uid: str, before: str) -> list[dict]:
         d = snap.to_dict() or {}
         names = {s["id"]: s.get("name", "") for s in d.get("storylines", [])}
         taken, untouched = [], []
+        # With timelines, only the person's actual path matters - alternatives they never
+        # visited (or already did elsewhere) aren't "ignored" plans.
+        try:
+            dp = DayPlan(**d)
+            on_path = {c.id for c in path.upcoming(dp)} if dp.timelines else None
+        except Exception:
+            on_path = None
         for c in d.get("chapters", []):
+            if on_path is not None and not c.get("chosenOptionId") and c["id"] not in on_path:
+                continue
             opt = next((o for o in c.get("options", []) if o.get("id") == c.get("chosenOptionId")), None)
             if opt:
                 taken.append(

@@ -27,6 +27,7 @@ export interface Option {
   detail: string
   durationMinutes: number | null
   goalIds: string[]
+  nextTimelineId?: string | null // where the day goes after this choice (null = stay)
 }
 
 export interface Chapter {
@@ -41,6 +42,8 @@ export interface Chapter {
   calendarName?: string | null
   calendarColor?: string | null
   scheduledCalendarId?: string | null
+  timelineId?: string | null
+  activityId?: string | null
   options: Option[]
   chosenOptionId: string | null
   chosenAt: string | null
@@ -54,6 +57,16 @@ export interface Storyline {
   color: string | null
 }
 
+export interface Timeline {
+  id: string
+  name: string
+  description: string
+  color: string | null
+  role?: 'healthy' | 'recovery' | 'rebel' | null
+  keptEventIds: string[]
+  skippedEvents: string[]
+}
+
 export interface DayPlan {
   date: string
   priorities: string
@@ -61,6 +74,8 @@ export interface DayPlan {
   dayEnd: string
   summary: string
   storylines: Storyline[]
+  timelines?: Timeline[]
+  currentTimelineId?: string | null
   chapters: Chapter[]
   updatedAt?: string | null
 }

@@ -52,6 +52,8 @@ class Option(BaseModel):
     detail: str = ""
     durationMinutes: int | None = None
     goalIds: list[str] = Field(default_factory=list)
+    # Where the day goes after this choice: another timeline's id, or None to stay put.
+    nextTimelineId: str | None = None
 
 
 class Chapter(BaseModel):
@@ -70,6 +72,25 @@ class Chapter(BaseModel):
     chosenAt: str | None = None
     scheduledEventId: str | None = None
     scheduledCalendarId: str | None = None  # where CYOA put the chosen path
+    timelineId: str | None = None  # which version of the day this chapter belongs to
+    # The same activity on different timelines shares an activityId (e.g. "event:<id>",
+    # "meal:lunch", "chem-study"), so doing it on one timeline counts on all of them.
+    activityId: str | None = None
+
+
+class Timeline(BaseModel):
+    """One complete version of the day: the same activities, arranged differently."""
+
+    id: str
+    name: str
+    description: str = ""
+    color: str | None = None
+    # healthy = perfect healthy routine, recovery = catch-up / recovery, rebel = just being human
+    role: Literal["healthy", "recovery", "rebel"] | None = None
+    # Calendar events this version of the day keeps (calendarEventIds). The first timeline
+    # always keeps every event; the others each skip some to do something else instead.
+    keptEventIds: list[str] = Field(default_factory=list)
+    skippedEvents: list[str] = Field(default_factory=list)  # titles, for display
 
 
 class Storyline(BaseModel):
@@ -86,6 +107,10 @@ class DayPlan(BaseModel):
     dayEnd: str = "22:00"
     summary: str = ""
     storylines: list[Storyline] = Field(default_factory=list)
+    # Empty for single-track plans (older ones). Chapters of every timeline live in
+    # `chapters`, each tagged with its timelineId.
+    timelines: list[Timeline] = Field(default_factory=list)
+    currentTimelineId: str | None = None  # where the person is right now
     chapters: list[Chapter] = Field(default_factory=list)
     updatedAt: str | None = None
 
@@ -192,6 +217,7 @@ class PlanDayIn(BaseModel):
     useCalendar: bool = True
     goalIds: list[str] | None = None  # None = use all open goals
     routes: int = 3  # how many storylines to aim for (2-4)
+    timelines: int = Field(default=3, ge=2, le=3)  # versions of the day: healthy, recovery, (rebel)
 
 
 class ChapterOptionsIn(BaseModel):

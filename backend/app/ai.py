@@ -6,6 +6,7 @@ a few parallel *storylines* (routes through the day) and a sequence of
 """
 
 import json
+import re
 import logging
 from typing import Literal
 
@@ -13,7 +14,7 @@ import anthropic
 from pydantic import BaseModel
 
 from .config import get_settings
-from .models import Chapter, DayPlan, Option, Storyline
+from .models import Chapter, DayPlan, Option, Storyline, Timeline
 from .timeutil import new_id
 
 log = logging.getLogger("cyoa.ai")
@@ -41,6 +42,7 @@ class AIOption(BaseModel):
     detail: str
     duration_minutes: int
     goal_ids: list[str]
+    next_timeline_key: str  # "" = stay on this timeline; otherwise switch to that timeline
 
 
 class AIChapter(BaseModel):
@@ -50,7 +52,16 @@ class AIChapter(BaseModel):
     priority: Literal["high", "medium", "low"]
     source: Literal["calendar", "goal", "custom", "meal", "break"]
     calendar_event_id: str  # "" when not tied to a calendar event
+    activity_key: str  # what this is, shared across timelines ("chem-study", "meal:lunch", "event:<id>")
     options: list[AIOption]
+
+
+class AITimeline(BaseModel):
+    key: str
+    name: str
+    description: str
+    kept_event_ids: list[str]  # calendar_event_ids of the anchors this timeline keeps
+    chapters: list[AIChapter]
 
 
 class AIMemoryUpdate(BaseModel):
@@ -61,7 +72,8 @@ class AIMemoryUpdate(BaseModel):
 class AIPlan(BaseModel):
     summary: str
     storylines: list[AIStoryline]
-    chapters: list[AIChapter]
+    anchors: list[AIChapter]  # calendar-event chapters, written once - shared by every timeline
+    timelines: list[AITimeline]  # flexible chapters only (goal / custom / meal / break)
     memory: AIMemoryUpdate
 
 
@@ -82,37 +94,96 @@ schedule, you build a day that is a branching story. The user still has a plan, 
 decision point ("chapter") they get several equally-valid options of the SAME priority, so
 there's always a good backup when plan A goes south.
 
-How to build the day:
-- Create the requested number of storylines (parallel routes through the day). Make them
-  meaningfully different. Examples: "Main Quest" (ambitious, deep focus), "Steady Path"
-  (moderate energy, keeps momentum), "Side Quest / Pivot" (low energy, errands, or a change
-  of scenery). Each storyline should still make progress on the user's priorities.
-- Chapters are time blocks between day_start and day_end, in chronological order, with
-  HH:MM 24-hour times in the user's local timezone. Do not overlap chapters. Leave a few
-  minutes for transitions. Typical chapter length is 30-90 minutes.
-- Calendar events become chapters with source="calendar" and calendar_event_id set to the
-  event id. They MUST offer these four options (one each, in this order):
+How to build the day - TIMELINES woven together by STORYLINES:
+- A day is not one schedule. Build number_of_timelines TIMELINES: complete versions of the
+  SAME day, each a full chronological list of chapters from day_start to day_end. Each has a
+  fixed ROLE, in this order (see timeline_roles; with 2 timelines, only the first two):
+    1. "healthy" - the PERFECT HEALTHY ROUTINE: the ideal, balanced version of today. Keeps
+       EVERY calendar event, makes steady progress on the top goals, and has proper meals,
+       movement, real breaks and a calm wind-down. The day they'd be proud of.
+    2. "recovery" - CATCH-UP / RECOVERY: for when they're behind or running low. Catches up
+       on what slipped (overdue or neglected goals, things recent_days show they skipped)
+       and protects energy: rest, lighter blocks, an early night.
+    3. "rebel" - the REBEL DAY: just being human. Hardly anything important gets done; it's
+       hanging out, hobbies, games, a long walk, a nap, seeing friends, doing nothing. Still
+       eats real meals. Warm, never guilt-trippy.
+  Give each a short evocative name that fits its role and a one-sentence description. The
+  activities overlap where it makes sense (meals, maybe a short goal block), but each
+  timeline arranges its day its own way - order, start times and lengths.
+- activity_key says WHAT a chapter is, and it is shared across timelines: the same activity
+  on every timeline uses the same key ("chem-study", "phil-essay", "gym", "meal:lunch",
+  "meal:dinner", "break:afternoon"). Anchors use "event:<calendar_event_id>". Each timeline
+  should cover the same flexible activity_keys. If you split an activity into parts, use
+  the same parts ("chem-study:1", "chem-study:2") on every timeline.
+- Calendar events are ANCHORS. Write each anchor chapter ONCE in "anchors" (never inside a
+  timeline), at its real time. Each timeline lists the anchors it keeps in kept_event_ids;
+  the app places those on that timeline. Timelines contain only flexible chapters (source
+  "goal", "custom", "meal", "break") fitted around the anchors they keep.
+- ONLY the healthy timeline has calendar events - it keeps every one. The recovery and rebel
+  timelines have NO calendar events at all (kept_event_ids = []): plan them as if the
+  calendar were cleared, using the whole day their own way. Don't recreate events there as
+  ordinary chapters either.
+- Timelines MUST be genuinely different. Besides skipping different events, no two timelines
+  may have the same flexible chapters at the same times: change the order (gym before study on one, after on another),
+  the timing, the lengths, and how work is chunked. Copying a timeline is a failure. Even on
+  a packed day, use every free gap differently.
+- Within ONE timeline chapters never overlap (including with the anchors). Chapters on different timelines may overlap
+  freely (they are alternatives). Leave a few minutes for transitions. Chapters are
+  HH:MM 24-hour times in the user's local timezone, typically 30-90 minutes.
+- STORYLINES are threads that weave the timelines together - not separate schedules. Create
+  number_of_storylines of them (e.g. "Chem push", "Recovery", "Social"), meaningfully
+  different, each still making progress on the user's priorities. Every option belongs to a
+  storyline (storyline_key) and decides where the day goes next with next_timeline_key:
+  "" to continue on the same timeline, or another timeline's key to switch to it once this
+  chapter ends. Use switches with intent: an option that leaves them drained leads to the
+  gentler timeline; finishing something early leads to the timeline that tackles the next
+  thing sooner. Say where it leads in the detail ("...then switch to Ease in: gym next,
+  chem tonight").
+- After a switch the person continues on the target timeline from this chapter's end time,
+  and anything they've already done (same activity_key) is skipped there - so make sure the
+  target timeline's later chapters still make sense from that point.
+- Every chapter offers 2-4 options from different storylines. In most non-anchor chapters at
+  least one option stays and at least one switches timelines. Every storyline should show up
+  throughout the day on every timeline, so a thread can be followed from morning to night.
+- Anchor chapters (in "anchors": source="calendar", calendar_event_id set) MUST offer these
+  four options (one each, in this order), each with its own storyline_key and
+  next_timeline_key (switching from an anchor means: after this event, continue on that
+  timeline):
     * kind="yes":     do the event as planned.
     * kind="yes_and": do the event AND attach something useful (prep, follow-up, combine with a goal).
     * kind="no":      skip/decline it and do a specific alternative of similar priority instead.
     * kind="no_and":  skip it, do an alternative AND something extra (recover the value another way).
   You may add more options with kind="route" if genuinely useful.
   All-day events are context, not chapters (mention them in option details if relevant).
+  EVERY timed (non-all-day) event in calendar_events must appear in "anchors" - never
+  drop one, and never replace one with goal work (put goal work in its yes_and / no options
+  instead). Long events (over ~2 hours, e.g. availability windows, shifts, fairs, office
+  hours) may be split into consecutive chapters with the same calendar_event_id, titled
+  "<event> (part 1)", "<event> (part 2)"..., so meals and breaks fit between the parts. If two
+  events overlap, both still appear (shorten or split one so chapters don't overlap).
   Events can come from several of the user's calendars (e.g. Work, Personal, Family); each
   event's "calendar" field names it. Use it as context (a Work meeting vs a family event
   deserve different alternatives), and if two calendars hold the same event, make one chapter.
-- Every other chapter (source="goal" or "custom") offers 2-4 options with kind="route",
-  ideally one per storyline, all at the same priority level. Pull these from the user's goals
-  (put the goal ids in goal_ids) and from their stated priorities.
-- Higher-priority goals belong earlier and in more storylines. Respect due dates and estimates.
-- storyline_key on every option must match one of your storylines' keys. For calendar
-  options, use the storyline whose spirit fits best.
-- Titles are short and actionable (max ~8 words). Details are one or two concrete sentences.
+- Other chapters (source="goal", "custom", "meal" or "break") use kind="route" options. Pull
+  them from the user's goals (put the goal ids in goal_ids) and their stated priorities.
+- Goals are long-term. A goal's total_effort_minutes is its TOTAL effort, usually spread over many
+  days - never try to finish a goal in one day. Plan a realistic slice today for the goals
+  that matter most now (higher priority and nearer due dates first); lower-priority goals can
+  get no time today. Daily limits per goal, counting all its blocks on that timeline:
+  healthy at most ~2 hours, recovery at most ~1.5 hours (catch-up items first), rebel at most
+  ~30 minutes and only if it's light. A free day is NOT a reason to fill every hour - open,
+  unscheduled time (free time, rest, social, a hobby) is healthy and should show up as such.
+- storyline_key on every option must match one of your storylines' keys, and
+  next_timeline_key must be "" or one of your timelines' keys.
+- Titles are short and actionable (max ~8 words). Details are ONE short concrete sentence
+  (max ~20 words) - keep the whole answer compact.
 - duration_minutes is how long that option takes; keep it within the chapter when possible.
-- summary: two or three upbeat sentences describing the shape of the day and its routes.
+- summary: two or three upbeat sentences: the timelines on offer and how the storylines let
+  them move between them.
 
 Meals (the "meals" field) - people need to eat, every day, on every route:
-- Every meal listed in "meals" MUST be its own chapter with source="meal", titled with the
+- On EVERY timeline, every meal listed in "meals" MUST be its own chapter with source="meal",
+  activity_key "meal:<breakfast|lunch|dinner>", titled with the
   meal ("Lunch", "Dinner"...), starting inside its window_start-window_end, as close to
   preferred_time as the day allows. Lengths: breakfast 15-30 min, lunch 30-60, dinner 30-60.
   Meals not listed (the person turned them off) don't get a chapter.
@@ -167,6 +238,9 @@ Memory (the "memory" field) - you are the same planner every day, and you know t
   If they had a big push yesterday, consider a lighter start. Reference the past
   naturally and briefly in the summary when it helps ("You crushed the Main Quest
   yesterday, so..."), like a coach who remembers - never creepy, never a recap of data.
+- Choosing the rebel timeline (or drifting into it) is normal and healthy now and then - never
+  treat it as failure, never nag about it, and don't record it as a problem. Only note a
+  pattern if it clearly matters to them (e.g. rebel days every time before an exam).
 - first_time=true means you're just meeting them: plan from the inputs alone.
 - Fill memory.learned with 0-3 short, durable, third-person observations worth
   remembering next time (e.g. "Does their best deep work before 11:00",
@@ -289,7 +363,7 @@ def _goal_summary(goals: list[dict]) -> list[dict]:
             "description": (g.get("description") or "")[:300],
             "status": g.get("status"),
             "priority": g.get("priority"),
-            "estimate_minutes": g.get("estimateMinutes"),
+            "total_effort_minutes": g.get("estimateMinutes"),  # whole goal, across many days
             "due_date": g.get("dueDate"),
             "tags": g.get("tags", []),
         }
@@ -297,19 +371,61 @@ def _goal_summary(goals: list[dict]) -> list[dict]:
     ]
 
 
-def _convert_options(ai_options: list[AIOption], key_to_id: dict[str, str], valid_goal_ids: set[str]) -> list[Option]:
-    return [
-        Option(
-            id=new_id(),
-            kind=o.kind,
-            storylineId=key_to_id.get(o.storyline_key),
-            title=o.title,
-            detail=o.detail,
-            durationMinutes=o.duration_minutes,
-            goalIds=[g for g in o.goal_ids if g in valid_goal_ids],
+def _convert_options(
+    ai_options: list[AIOption],
+    key_to_id: dict[str, str],
+    valid_goal_ids: set[str],
+    timeline_key_to_id: dict[str, str] | None = None,
+    own_timeline_id: str | None = None,
+) -> list[Option]:
+    tl = timeline_key_to_id or {}
+    out = []
+    for o in ai_options:
+        nxt = tl.get(o.next_timeline_key.strip()) if o.next_timeline_key else None
+        out.append(
+            Option(
+                id=new_id(),
+                kind=o.kind,
+                storylineId=key_to_id.get(o.storyline_key),
+                title=o.title,
+                detail=o.detail,
+                durationMinutes=o.duration_minutes,
+                goalIds=[g for g in o.goal_ids if g in valid_goal_ids],
+                nextTimelineId=nxt if nxt and nxt != own_timeline_id else None,
+            )
         )
-        for o in ai_options
-    ]
+    return out
+
+
+TIMELINE_ROLES = ["healthy", "recovery", "rebel"]
+TIMELINE_COLORS = ["#5b7cfa", "#d9a13b", "#3fa66b", "#b25fd6"]
+
+
+def _norm(text: str) -> str:
+    return "".join(ch for ch in (text or "").lower() if ch.isalnum())
+
+
+def _looks_like_event(c: AIChapter, events: list[dict]) -> bool:
+    """A flexible chapter that is really a calendar event (same name, overlapping time)."""
+    title = _norm(c.title)
+    for e in events:
+        if not (c.start < e["end"] and c.end > e["start"]):
+            continue
+        core = re.split(r"[—–(:|]| - ", e["summary"])[0]  # "PHIL 22-01 — Ethical Theory" -> "PHIL 22-01"
+        names = {_norm(e["summary"])[:24], _norm(core)}
+        if any(len(n) >= 4 and n in title for n in names):
+            return True
+    return False
+
+
+def _activity_id(c: AIChapter, is_event: bool) -> str:
+    if is_event:
+        key = f"event:{c.calendar_event_id}"
+        title = c.title.lower()
+        part = re.search(r"\(part (\d+)", title)  # split events: one activity per part
+        return f"{key}:{part.group(1)}" if part else key
+    key = re.sub(r"[^a-z0-9:_-]+", "-", (c.activity_key or "").strip().lower()).strip("-")
+    return key or new_id()
 
 
 def plan_day(
@@ -328,14 +444,18 @@ def plan_day(
     memory: dict | None = None,
     meals: list[dict] | None = None,
     meal_notes: str = "",
+    timelines: int = 3,
 ) -> tuple[DayPlan, MemoryUpdate]:
     routes = max(2, min(routes, 4))
+    n_timelines = max(2, min(timelines, len(TIMELINE_ROLES)))
     context = {
         "date": date,
         "weekday": weekday,
         "timezone": timezone,
         "day_start": day_start,
         "day_end": day_end,
+        "number_of_timelines": n_timelines,
+        "timeline_roles": TIMELINE_ROLES[:n_timelines],
         "number_of_storylines": routes,
         "plan_is_for_today": is_today,
         "sleep": sleep or {"tracked": False},
@@ -366,22 +486,58 @@ def plan_day(
     valid_goal_ids = {g["id"] for g in goals}
     events_by_id = {e["id"]: e for e in events}
     valid_event_ids = set(events_by_id)
-    chapters = [
-        Chapter(
-            id=new_id(),
-            start=c.start,
-            end=c.end,
-            title=c.title,
-            priority=c.priority,
-            source=c.source if (c.source != "calendar" or c.calendar_event_id in valid_event_ids) else "custom",
-            calendarEventId=c.calendar_event_id if c.calendar_event_id in valid_event_ids else None,
-            calendarId=events_by_id.get(c.calendar_event_id, {}).get("calendarId"),
-            calendarName=events_by_id.get(c.calendar_event_id, {}).get("calendarName"),
-            calendarColor=events_by_id.get(c.calendar_event_id, {}).get("color"),
-            options=_convert_options(c.options, key_to_id, valid_goal_ids),
+
+    all_event_ids = [e["id"] for e in events if not e.get("allDay")]
+    timelines: list[Timeline] = []
+    tl_key_to_id: dict[str, str] = {}
+    kept_by_tl: dict[str, set[str]] = {}
+    for i, t in enumerate(plan.timelines[:n_timelines]):
+        tid = new_id()
+        tl_key_to_id[t.key.strip()] = tid
+        # Only the first (healthy) timeline has calendar events; the others have none.
+        kept = set(all_event_ids) if i == 0 else set()
+        kept_by_tl[tid] = kept
+        timelines.append(
+            Timeline(
+                id=tid,
+                name=t.name,
+                description=t.description,
+                color=TIMELINE_COLORS[i % len(TIMELINE_COLORS)],
+                role=TIMELINE_ROLES[i],
+                keptEventIds=sorted(kept),
+                skippedEvents=[e["summary"] for e in events if not e.get("allDay") and e["id"] not in kept],
+            )
         )
-        for c in sorted(plan.chapters, key=lambda c: c.start)
-    ]
+
+    chapters: list[Chapter] = []
+    for t in plan.timelines[:n_timelines]:
+        tid = tl_key_to_id[t.key.strip()]
+        kept = kept_by_tl[tid]
+        anchors = [a for a in plan.anchors if a.calendar_event_id in kept]
+        flexible = [c for c in t.chapters if c.source != "calendar"]  # anchors come from plan.anchors
+        if not kept:  # event-free timeline: drop events the model re-added as ordinary chapters
+            flexible = [c for c in flexible if not _looks_like_event(c, events)]
+        for c in sorted([*anchors, *flexible], key=lambda c: c.start):
+            is_event = c.source == "calendar" and c.calendar_event_id in valid_event_ids
+            ev = events_by_id.get(c.calendar_event_id, {}) if is_event else {}
+            chapters.append(
+                Chapter(
+                    id=new_id(),
+                    start=c.start,
+                    end=c.end,
+                    title=c.title,
+                    priority=c.priority,
+                    source=c.source if (c.source != "calendar" or is_event) else "custom",
+                    calendarEventId=c.calendar_event_id if is_event else None,
+                    calendarId=ev.get("calendarId"),
+                    calendarName=ev.get("calendarName"),
+                    calendarColor=ev.get("color"),
+                    timelineId=tid,
+                    # Same activity on every timeline -> same id, so doing it once counts everywhere.
+                    activityId=_activity_id(c, is_event),
+                    options=_convert_options(c.options, key_to_id, valid_goal_ids, tl_key_to_id, tid),
+                )
+            )
     day = DayPlan(
         date=date,
         priorities=priorities,
@@ -389,6 +545,8 @@ def plan_day(
         dayEnd=day_end,
         summary=plan.summary,
         storylines=storylines,
+        timelines=timelines,
+        currentTimelineId=timelines[0].id if timelines else None,
         chapters=chapters,
     )
     return day, MemoryUpdate(**plan.memory.model_dump())
@@ -406,6 +564,12 @@ def regenerate_options(
 ) -> tuple[list[Option], MemoryUpdate]:
     id_to_key = {s.id: f"s{i}" for i, s in enumerate(day.storylines)}
     key_to_id = {v: k for k, v in id_to_key.items()}
+    tl_to_key = {t.id: f"t{i}" for i, t in enumerate(day.timelines)}
+    tl_key_to_id = {v: k for k, v in tl_to_key.items()}
+
+    def schedule(tid):
+        return [f"{c.start}-{c.end} {c.title}" for c in sorted(day.chapters, key=lambda c: c.start) if c.timelineId == tid and c.id != chapter.id]
+
     context = {
         "date": day.date,
         "user_priorities_for_the_day": day.priorities,
@@ -418,7 +582,12 @@ def regenerate_options(
             "source": chapter.source,
             "current_options": [o.title for o in chapter.options],
         },
-        "other_chapters_today": [f"{c.start}-{c.end} {c.title}" for c in day.chapters if c.id != chapter.id],
+        "this_chapter_timeline": tl_to_key.get(chapter.timelineId, ""),
+        "timelines": [
+            {"key": tl_to_key[t.id], "name": t.name, "description": t.description, "chapters": schedule(t.id)}
+            for t in day.timelines
+        ],
+        "other_chapters_today": [] if day.timelines else [f"{c.start}-{c.end} {c.title}" for c in day.chapters if c.id != chapter.id],
         "goals": _goal_summary(goals),
         "user_hint": hint or "(none) - offer fresh alternatives",
         "meal_notes": meal_notes or "(none)",
@@ -433,10 +602,18 @@ def regenerate_options(
         "never 'keep working'.",
     }
     rule = rules.get(chapter.source, "Return 2-4 options with kind='route', one per storyline where possible, same priority.")
+    if day.timelines:
+        rule += (
+            " Set next_timeline_key on each option: \"\" to stay on this_chapter_timeline, or another"
+            " timeline's key to switch there after this chapter - keep at least one that stays and,"
+            " where it makes sense, one that switches."
+        )
+    else:
+        rule += " This day has no timelines: set next_timeline_key to \"\" on every option."
     result: AIOptionList = _call(
         AIOptionList,
         f"Write new options for ONE chapter of an existing day. {rule}\n\n" + json.dumps(context, indent=2),
         max_tokens=8000,
     )
-    options = _convert_options(result.options, key_to_id, {g["id"] for g in goals})
+    options = _convert_options(result.options, key_to_id, {g["id"] for g in goals}, tl_key_to_id, chapter.timelineId)
     return options, MemoryUpdate(**result.memory.model_dump())

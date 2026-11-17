@@ -16,6 +16,7 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 from .auth import load_settings_by_uid
 from .config import get_settings
 from .firebase import db, user_ref
+from . import path
 from .models import Chapter, DayPlan, UserSettings
 from .timeutil import local_dt
 
@@ -36,8 +37,8 @@ def rebuild_reminders(uid: str, plan: DayPlan, settings: UserSettings) -> None:
         batch.delete(doc.reference)
     if settings.emailReminders:
         now = datetime.now(UTC)
-        for ch in plan.chapters:
-            if ch.chosenOptionId or not ch.options or ch.source == "break":
+        for ch in path.upcoming(plan):  # only the timeline they're actually on
+            if not ch.options or ch.source == "break":
                 continue  # (breaks are short - no email for them)
             send_at = local_dt(plan.date, ch.start, settings.timezone) - timedelta(minutes=settings.reminderLeadMinutes)
             if send_at.astimezone(UTC) < now - timedelta(minutes=1):
@@ -114,7 +115,7 @@ def process_due_reminders() -> int:
             snap = user_ref(uid).collection("days").document(day).get()
             if settings and settings.emailReminders and snap.exists:
                 plan = DayPlan(**snap.to_dict())
-                ch = next((c for c in plan.chapters if c.id == chapter_id), None)
+                ch = next((c for c in path.upcoming(plan) if c.id == chapter_id), None)  # still on their path?
                 stale = now - r["sendAt"] > timedelta(hours=1)  # e.g. server was off
                 if ch and not ch.chosenOptionId and not stale:
                     to = settings.notifyEmail or settings.email

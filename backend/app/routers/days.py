@@ -52,8 +52,10 @@ def list_days(start: str, end: str, user: CurrentUser = Depends(current_user)):
         out.append(
             {
                 "date": d["date"],
-                "chapters": len(chapters),
+                # Activities, not chapters: three timelines shouldn't triple the count.
+                "chapters": len({c.get("activityId") or c["id"] for c in chapters}),
                 "chosen": sum(1 for c in chapters if c.get("chosenOptionId")),
+                "timelines": len(d.get("timelines", [])),
                 "storylines": len(d.get("storylines", [])),
             }
         )
@@ -181,6 +183,12 @@ def choose(day: str, chapter_id: str, body: ChooseIn, user: CurrentUser = Depend
 
     ch.chosenOptionId = opt.id
     ch.chosenAt = now_iso()
+    if plan.timelines:
+        valid = {t.id for t in plan.timelines}
+        # The option's storyline thread decides which timeline the day continues on.
+        nxt = opt.nextTimelineId if opt.nextTimelineId in valid else ch.timelineId
+        if nxt in valid:
+            plan.currentTimelineId = nxt
     save_day(user.uid, plan, settings)
     clear_reminder(user.uid, day, ch.id)
     return {"plan": plan, "calendar": calendar_status}

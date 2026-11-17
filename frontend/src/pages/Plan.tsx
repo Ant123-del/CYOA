@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api, ApiError } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useSleep } from '../lib/sleep'
 import { addDays, fmtTime, isoDate, newId, prettyDate } from '../lib/dates'
-import { SourceTag, KindBadge } from '../components/Adventure'
+import { SourceTag, KindBadge, SwitchTag, calendarNote, timelineLabel } from '../components/Adventure'
+import TimelineMap from '../components/TimelineMap'
 import PlanningScreen from '../components/PlanningScreen'
+import StorylineLanes from '../components/StorylineLanes'
+import ViewToggle, { useDayView } from '../components/ViewToggle'
 import type { Chapter, DayPlan, DaySummary, Option, OptionKind, PlanJob, Priority } from '../types'
 
 const STORYLINE_COLORS = ['#7c5cff', '#16a394', '#e8833a', '#d6457a', '#3b82f6']
@@ -43,10 +46,13 @@ export default function Plan() {
   const [week, setWeek] = useState<DaySummary[]>([])
   const [useCalendar, setUseCalendar] = useState(true)
   const [routes, setRoutes] = useState(3)
+  const [timelineCount, setTimelineCount] = useState(3)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [job, setJob] = useState<PlanJob | null>(null)
+  const [view, setView] = useDayView()
+  const [editTl, setEditTl] = useState<string | null>(null)
 
   const weekStart = isoDate()
   const weekDays = Array.from({ length: 8 }, (_, i) => addDays(weekStart, i))
@@ -116,6 +122,12 @@ export default function Plan() {
     }
   }, [jobId, date, loadWeek])
 
+  const branching = Boolean(plan.timelines?.length)
+  const tlId = branching ? (plan.timelines!.find((t) => t.id === editTl)?.id ?? plan.timelines![0].id) : null
+  const visibleChapters = tlId
+    ? plan.chapters.filter((c) => c.timelineId === tlId).sort((a, b) => a.start.localeCompare(b.start))
+    : plan.chapters
+
   const update = (fn: (p: DayPlan) => DayPlan) => {
     setPlan((p) => fn(structuredClone(p)))
     setDirty(true)
@@ -139,7 +151,7 @@ export default function Plan() {
         return
       }
       const text = open
-        .map((g) => `- [${g.priority}] ${g.title}${g.estimateMinutes ? ` (~${g.estimateMinutes}m)` : ''}${g.dueDate ? ` due ${g.dueDate}` : ''}`)
+        .map((g) => `- [${g.priority}] ${g.title}${g.estimateMinutes ? ` (~${g.estimateMinutes}m total, over several days)` : ''}${g.dueDate ? ` due ${g.dueDate}` : ''}`)
         .join('\n')
       update((p) => ({ ...p, priorities: p.priorities ? `${p.priorities.trim()}\n${text}` : text }))
     } catch (e) {
@@ -160,6 +172,7 @@ export default function Plan() {
         dayEnd: plan.dayEnd,
         useCalendar: useCalendar && Boolean(settings?.googleConnected),
         routes,
+        timelines: timelineCount,
       })
       setJob(j)
       // Start the work without waiting on it: progress comes from polling, and if this
@@ -192,8 +205,13 @@ export default function Plan() {
     setBusy('import')
     try {
       const chapters = await api.importCalendar(date)
-      const known = new Set(plan.chapters.map((c) => c.calendarEventId).filter(Boolean))
-      const fresh = chapters.filter((c) => !known.has(c.calendarEventId))
+      const known = new Set(
+        plan.chapters.filter((c) => !tlId || c.timelineId === tlId).map((c) => c.calendarEventId).filter(Boolean),
+      )
+      // On a branching day, imported events go into the timeline you're editing.
+      const fresh = chapters
+        .filter((c) => !known.has(c.calendarEventId))
+        .map((c) => (tlId ? { ...c, timelineId: tlId, activityId: `event:${c.calendarEventId}` } : c))
       update((p) => ({ ...p, chapters: [...p.chapters, ...fresh].sort((a, b) => a.start.localeCompare(b.start)) }))
       setNotice(fresh.length ? `Imported ${fresh.length} calendar event(s). Remember to save.` : 'No new timed events found.')
     } catch (e) {
@@ -218,7 +236,8 @@ export default function Plan() {
 
   const addChapter = () =>
     update((p) => {
-      const last = p.chapters[p.chapters.length - 1]
+      const mine = p.chapters.filter((c) => !tlId || c.timelineId === tlId).sort((a, b) => a.start.localeCompare(b.start))
+      const last = mine[mine.length - 1]
       const start = last?.end ?? p.dayStart
       const [h, m] = start.split(':').map(Number)
       const end = `${String(Math.min(h + 1, 23)).padStart(2, '0')}:${String(m).padStart(2, '0')}`
@@ -236,6 +255,8 @@ export default function Plan() {
         chosenOptionId: null,
         chosenAt: null,
         scheduledEventId: null,
+        timelineId: tlId,
+        activityId: tlId ? newId() : null,
       })
       return p
     })
@@ -331,7 +352,20 @@ export default function Plan() {
             </div>
           )}
           <label>
-            Storylines (routes)
+            Timelines (versions of the day)
+            <div className="seg">
+              {[2, 3].map((n) => (
+                <button key={n} className={timelineCount === n ? 'on' : ''} onClick={() => setTimelineCount(n)}>
+                  {n}
+                </button>
+              ))}
+            </div>
+            <span className="seg-hint">
+              🌱 Healthy routine · 🔋 Catch-up / recovery{timelineCount === 3 ? ' · 🎈 Rebel day' : ''}
+            </span>
+          </label>
+          <label>
+            Storylines (threads that weave between them)
             <div className="seg">
               {[2, 3, 4].map((n) => (
                 <button key={n} className={routes === n ? 'on' : ''} onClick={() => setRoutes(n)}>
@@ -426,8 +460,44 @@ export default function Plan() {
               </p>
             </div>
           ) : (
+            <>
+              <div className="view-row">
+                <ViewToggle
+                  view={view}
+                  onChange={setView}
+                  firstLabel="Edit chapters"
+                  secondLabel={branching ? 'All timelines' : 'Storylines'}
+                />
+              </div>
+              {view === 'storylines' ? (
+                branching ? <TimelineMap plan={plan} /> : <StorylineLanes plan={plan} />
+              ) : (
+            <>
+            {branching && (
+              <div className="tl-tabs">
+                <span className="muted small">Editing timeline:</span>
+                {plan.timelines!.map((t) => (
+                  <button
+                    key={t.id}
+                    className={`tl-tab${t.id === tlId ? ' on' : ''}`}
+                    style={{ '--c': t.color ?? 'var(--accent)' } as CSSProperties}
+                    onClick={() => setEditTl(t.id)}
+                  >
+                    {timelineLabel(t)}
+                  </button>
+                ))}
+                {(() => {
+                  const t = plan.timelines!.find((x) => x.id === tlId)
+                  return t ? (
+                    <p className="muted small tl-tab-desc">
+                      {t.description} {calendarNote(t)}.
+                    </p>
+                  ) : null
+                })()}
+              </div>
+            )}
             <ol className="chapter-list">
-              {plan.chapters.map((c, i) => (
+              {visibleChapters.map((c, i) => (
                 <ChapterEditor
                   key={c.id}
                   index={i}
@@ -445,6 +515,9 @@ export default function Plan() {
                 />
               ))}
             </ol>
+            </>
+              )}
+            </>
           )}
         </section>
       </div>
@@ -485,7 +558,10 @@ function ChapterEditor({
         <span className={`tag prio prio-${c.priority}`}>{c.priority}</span>
         <span className="option-dots">
           {c.options.map((o) => (
-            <KindBadge key={o.id} option={o} storylines={plan.storylines} />
+            <span key={o.id} className="preview-opt">
+              <KindBadge option={o} storylines={plan.storylines} />
+              <SwitchTag option={o} timelines={plan.timelines} />
+            </span>
           ))}
         </span>
         <span className="chev">{open ? '▾' : '▸'}</span>
@@ -565,6 +641,24 @@ function ChapterEditor({
                   value={o.detail}
                   onChange={(e) => onChange((x) => void (x.options[oi].detail = e.target.value))}
                 />
+                {plan.timelines?.length ? (
+                  <label className="then-select">
+                    Then
+                    <select
+                      value={o.nextTimelineId ?? ''}
+                      onChange={(e) => onChange((x) => void (x.options[oi].nextTimelineId = e.target.value || null))}
+                    >
+                      <option value="">stay on this timeline</option>
+                      {plan.timelines
+                        .filter((t) => t.id !== c.timelineId)
+                        .map((t) => (
+                          <option key={t.id} value={t.id}>
+                            switch to {timelineLabel(t)}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                ) : null}
               </div>
             ))}
             <button className="btn ghost small" onClick={() => onChange((x) => void x.options.push(newOption()))}>

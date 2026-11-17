@@ -79,6 +79,7 @@ export const api = {
     dayEnd: string
     useCalendar: boolean
     routes: number
+    timelines: number
     goalIds?: string[] | null
   }) => request<PlanJob>('POST', '/api/ai/plan-day', body),
   activePlanJob: (date: string) => request<PlanJob | null>('GET', `/api/ai/plan-jobs?date=${date}`),

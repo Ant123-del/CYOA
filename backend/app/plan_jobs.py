@@ -22,7 +22,7 @@ from datetime import date as date_cls
 from google.cloud import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 
-from . import ai, meals, memory
+from . import ai, coverage, meals, memory
 from . import google_calendar as gcal
 from .auth import load_settings_by_uid
 from .config import get_settings
@@ -95,10 +95,23 @@ def generate_day(uid: str, body: PlanDayIn) -> DayPlan:
         memory=memory.context_for(uid, body.date),
         meals=windows,
         meal_notes=settings.mealNotes,
+        timelines=body.timelines,
     )
-    added = meals.ensure_meals(plan, windows)  # safety net: every meal is guaranteed
+    # Safety nets, per timeline: no calendar event is dropped, every meal is guaranteed.
+    added: list[str] = []
+    tracks = [(t.id, set(t.keptEventIds)) for t in plan.timelines] or [(None, None)]
+    rebuilt = []
+    for tid, kept in tracks:
+        track = plan.model_copy(update={"chapters": [c for c in plan.chapters if c.timelineId == tid]})
+        added += coverage.ensure_events(track, [e for e in events if kept is None or e["id"] in kept])
+        added += meals.ensure_meals(track, windows)
+        added += coverage.resolve_overlaps(track)  # nothing on one timeline overlaps
+        for c in track.chapters:
+            c.timelineId = tid
+        rebuilt.extend(track.chapters)
+    plan.chapters = rebuilt
     if added:
-        log.info("Meal safety net for %s on %s: %s", uid, body.date, "; ".join(added))
+        log.info("Safety net for %s on %s: %s", uid, body.date, "; ".join(added))
     saved = save_day(uid, plan, settings)
     memory.record(
         uid,
