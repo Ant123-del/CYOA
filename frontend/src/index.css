@@ -1721,11 +1721,24 @@ label.check input {
   background: var(--surface-2);
 }
 .cal-name {
-  flex: 1;
-  min-width: 180px;
+  flex: 1 1 220px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
-.cal-name .tag {
-  margin-left: 6px;
+.cal-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.cal-tags .tag {
+  white-space: normal;
+}
+.cal-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
 }
 .cal-name .muted {
   word-break: break-all;
@@ -1790,4 +1803,8 @@ label.check.small {
 }
 .meal-time input {
   width: auto;
+}
+.tl-head h3 {
+  flex-wrap: wrap;
+  min-width: 0;
 }

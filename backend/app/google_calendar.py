@@ -28,6 +28,12 @@ Security rules enforced here (the browser can never bypass them):
        a. the ID equals their own verified Google sign-in email (their primary calendar), or
        b. they put a one-time code in the calendar's Description. Only people who manage
           the calendar can edit that; CYOA itself only has event access.
+     Exception - view-only calendars with random IDs (…@group/import.calendar.google.com):
+     these can't be guessed (the ID works like a secret link) and imported/subscribed
+     calendars have no editable Description, so they link without a code. Each such
+     calendar is claimed by the first CYOA account that links it (calendarClaims/{key});
+     any other account still needs the code. Email-address IDs (guessable) always need
+     proof, and a code-less link never becomes writable without proof.
   4. Linked calendars live server-side in users/{uid}/calendars (Firestore rules deny all
      browser access). Any calendar ID that arrives from the browser - e.g. inside a saved
      day plan - is only used if it is one of *this user's* linked calendars.
@@ -128,6 +134,18 @@ def _challenge_ref(uid: str):
     return user_ref(uid).collection("private").document("calendarChallenge")
 
 
+def _claim_ref(key: str):
+    return db().collection("calendarClaims").document(key)
+
+
+def _has_random_id(cid: str) -> bool:
+    """Google-generated calendar IDs (not someone's email address) - effectively unguessable."""
+    return cid.lower().endswith(".calendar.google.com")
+
+
+VIEW_ONLY_METHOD = "view_only_id"
+
+
 def _migrate_legacy(uid: str) -> None:
     snap = _legacy_ref(uid).get()
     if not snap.exists:
@@ -211,7 +229,14 @@ def _sync_user_doc(uid: str) -> None:
     )
 
 
+def _release_claim(uid: str, key: str) -> None:
+    claim = _claim_ref(key).get()
+    if claim.exists and claim.to_dict().get("uid") == uid:
+        _claim_ref(key).delete()
+
+
 def unlink_calendar(uid: str, key: str) -> None:
+    _release_claim(uid, key)
     _cals_col(uid).document(key).delete()
     linked_calendars(uid)  # re-elects a default if needed
     _sync_user_doc(uid)
@@ -219,6 +244,7 @@ def unlink_calendar(uid: str, key: str) -> None:
 
 def unlink_all(uid: str) -> None:
     for c in linked_calendars(uid):
+        _release_claim(uid, c["key"])
         _cals_col(uid).document(c["key"]).delete()
     _legacy_ref(uid).delete()
     _challenge_ref(uid).delete()
@@ -353,13 +379,23 @@ def link_calendar(uid: str, email: str, email_verified: bool, raw_id: str) -> di
     color = entry.get("backgroundColor")
     can_write = entry.get("accessRole") in ("writer", "owner")
 
-    # Already proven for this user: just refresh name/colour.
-    if already:
+    # Already linked: refresh name/colour/access - unless a code-less view-only link has now
+    # gained write access, which needs real proof of ownership first.
+    if already and not (already.get("method") == VIEW_ONLY_METHOD and can_write):
         return _save_link(uid, cid, name, color, can_write, already.get("method", "relink"))
 
     # Rule 3a: your own primary calendar (its ID is your verified Google email).
     if email_verified and email and cid.lower() == email.lower():
         return _save_link(uid, cid, name, color, can_write, "verified_email")
+
+    # Exception to rule 3: view-only calendar with an unguessable ID, not claimed by anyone else.
+    if not can_write and _has_random_id(cid):
+        key = calendar_key(cid)
+        claim = _claim_ref(key).get()
+        if not claim.exists or claim.to_dict().get("uid") == uid:
+            _claim_ref(key).set({"uid": uid, "claimedAt": datetime.now(UTC)})
+            return _save_link(uid, cid, name, color, can_write, VIEW_ONLY_METHOD)
+        # Someone else already linked it: fall through to the ownership code.
 
     # Rule 3b: prove you manage the calendar with a one-time code in its description.
     now = datetime.now(UTC)

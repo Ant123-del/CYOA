@@ -313,55 +313,61 @@ function CalendarSection({
               <span className="dot" style={{ background: c.color ?? 'var(--accent)' }} />
               <div className="cal-name">
                 <b>{c.calendarName}</b>
-                {c.isDefault && <span className="tag">Default · new events go here</span>}
-                {!c.canWrite && <span className="tag subtle">View-only share</span>}
-                {c.canWrite && c.readOnly && <span className="tag subtle">Never edit</span>}
                 <div className="muted small">{c.calendarId}</div>
+                {(c.isDefault || !c.canWrite || c.readOnly) && (
+                  <div className="cal-tags">
+                    {c.isDefault && <span className="tag">Default · new events go here</span>}
+                    {!c.canWrite && <span className="tag subtle">View-only share</span>}
+                    {c.canWrite && c.readOnly && <span className="tag subtle">Never edit</span>}
+                  </div>
+                )}
               </div>
-              <label className="check small">
-                <input
-                  type="checkbox"
-                  checked={c.readEnabled}
-                  disabled={busy !== null}
-                  onChange={(e) => run(c.key, () => api.updateCalendar(c.key, { readEnabled: e.target.checked }))}
-                />
-                Use for planning
-              </label>
-              <label
-                className="check small"
-                title={
-                  c.canWrite
-                    ? 'Turn off to make sure CYOA never adds or removes events on this calendar'
-                    : "Shared as view-only. Change the share to 'Make changes to events' in Google Calendar and re-link it to allow this."
-                }
-              >
-                <input
-                  type="checkbox"
-                  checked={c.writable}
-                  disabled={busy !== null || !c.canWrite}
-                  onChange={(e) => run(c.key, () => api.updateCalendar(c.key, { readOnly: !e.target.checked }))}
-                />
-                Let CYOA add events
-              </label>
-              {!c.isDefault && c.writable && (
-                <button
-                  className="btn ghost small"
-                  disabled={busy !== null}
-                  onClick={() => run(c.key, () => api.updateCalendar(c.key, { isDefault: true }))}
+              <div className="cal-controls">
+                <label className="check small">
+                  <input
+                    type="checkbox"
+                    checked={c.readEnabled}
+                    disabled={busy !== null}
+                    onChange={(e) => run(c.key, () => api.updateCalendar(c.key, { readEnabled: e.target.checked }))}
+                  />
+                  Use for planning
+                </label>
+                <label
+                  className="check small"
+                  title={
+                    c.canWrite
+                      ? 'Turn off to make sure CYOA never adds or removes events on this calendar'
+                      : "Shared as view-only. Change the share to 'Make changes to events' in Google Calendar and re-link it to allow this."
+                  }
                 >
-                  Make default
+                  <input
+                    type="checkbox"
+                    checked={c.writable}
+                    disabled={busy !== null || !c.canWrite}
+                    onChange={(e) => run(c.key, () => api.updateCalendar(c.key, { readOnly: !e.target.checked }))}
+                  />
+                  Let CYOA add events
+                </label>
+                {!c.isDefault && c.writable && (
+                  <button
+                    className="btn ghost small"
+                    disabled={busy !== null}
+                    onClick={() => run(c.key, () => api.updateCalendar(c.key, { isDefault: true }))}
+                  >
+                    Make default
+                  </button>
+                )}
+                <button
+                  className="btn ghost danger small"
+                  disabled={busy !== null}
+                  onClick={() => {
+                    if (confirm(`Unlink “${c.calendarName}”? CYOA will stop reading and writing it.`))
+                      run(c.key, () => api.removeCalendar(c.key))
+                  }}
+                >
+                  Remove
                 </button>
-              )}
-              <button
-                className="btn ghost danger small"
-                disabled={busy !== null}
-                onClick={() => {
-                  if (confirm(`Unlink “${c.calendarName}”? CYOA will stop reading and writing it.`))
-                    run(c.key, () => api.removeCalendar(c.key))
-                }}
-              >
-                Remove
-              </button>
+              </div>
             </li>
           ))}
         </ul>
@@ -385,7 +391,8 @@ function CalendarSection({
             </li>
             <li>
               In <b>Share with specific people or groups</b>, add this address. Pick <b>Make changes to events</b>{' '}
-              if CYOA may add your chosen paths there, or <b>See all event details</b> to keep it view-only:
+              if CYOA may add your chosen paths there, or <b>See all event details</b> to keep it view-only (view-only
+              calendars like subscribed/imported ones usually link without a verification code):
               <div className="copy-row">
                 <code>{sa || '…'}</code>
                 <button className="btn ghost small" onClick={() => copy(sa)} disabled={!sa}>
@@ -413,9 +420,11 @@ function CalendarSection({
           {code && (
             <div className="verify">
               <p>
-                <b>One more step - prove this calendar is yours.</b> On the same Google Calendar settings page, paste
-                this code anywhere in the calendar's <b>Description</b>, save, then click <b>Verify</b>. You can remove
-                it afterwards.
+                <b>One more step - prove this calendar is yours.</b> This is needed for calendars CYOA can edit, and
+                for calendars whose ID is an email address. On the same Google Calendar settings page, paste this code
+                anywhere in the calendar's <b>Description</b>, save, then click <b>Verify</b>. You can remove it
+                afterwards. (If you only want CYOA to read this calendar, change the share to{' '}
+                <b>See all event details</b> and click <b>Verify</b> again - no code needed for most calendars.)
               </p>
               <div className="copy-row">
                 <code>{code}</code>
