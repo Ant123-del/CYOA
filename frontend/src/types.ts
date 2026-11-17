@@ -44,6 +44,7 @@ export interface Chapter {
   scheduledCalendarId?: string | null
   timelineId?: string | null
   activityId?: string | null
+  missed?: boolean
   options: Option[]
   chosenOptionId: string | null
   chosenAt: string | null
@@ -67,6 +68,14 @@ export interface Timeline {
   skippedEvents: string[]
 }
 
+export interface Revision {
+  at: string
+  feedback: string
+  timelineId: string | null
+  reply: string
+  applied: number
+}
+
 export interface DayPlan {
   date: string
   priorities: string
@@ -77,6 +86,7 @@ export interface DayPlan {
   timelines?: Timeline[]
   currentTimelineId?: string | null
   chapters: Chapter[]
+  revisions?: Revision[]
   updatedAt?: string | null
 }
 
@@ -105,6 +115,7 @@ export interface UserSettings {
   dinnerEnabled: boolean
   dinnerTime: string
   mealNotes: string
+  assumeMissed: boolean
   sleepTargetHours: number
 }
 

@@ -72,6 +72,7 @@ class Chapter(BaseModel):
     chosenAt: str | None = None
     scheduledEventId: str | None = None
     scheduledCalendarId: str | None = None  # where CYOA put the chosen path
+    missed: bool = False  # the person says (or we assume) this one didn't happen
     timelineId: str | None = None  # which version of the day this chapter belongs to
     # The same activity on different timelines shares an activityId (e.g. "event:<id>",
     # "meal:lunch", "chem-study"), so doing it on one timeline counts on all of them.
@@ -112,7 +113,27 @@ class DayPlan(BaseModel):
     timelines: list[Timeline] = Field(default_factory=list)
     currentTimelineId: str | None = None  # where the person is right now
     chapters: list[Chapter] = Field(default_factory=list)
+    revisions: list["Revision"] = Field(default_factory=list)  # feedback conversation with the AI
     updatedAt: str | None = None
+
+
+class Revision(BaseModel):
+    at: str
+    feedback: str
+    timelineId: str | None = None  # None = all timelines
+    reply: str = ""
+    applied: int = 0
+
+
+class ReviseIn(BaseModel):
+    date: str
+    feedback: str = Field(min_length=1, max_length=1000)
+    timelineId: str | None = None  # revise just this timeline (None = all)
+    rewrite: bool = False  # rewrite the chosen timeline from scratch (same role)
+
+
+class MissedIn(BaseModel):
+    missed: bool = True
 
 
 class ChooseIn(BaseModel):
@@ -143,6 +164,7 @@ class UserSettings(BaseModel):
     dinnerEnabled: bool = True
     dinnerTime: str = "18:30"
     mealNotes: str = ""  # e.g. "vegetarian, usually cook dinner at home"
+    assumeMissed: bool = True  # chapters whose time passed without a choice count as missed
     sleepTargetHours: float = 8.0
 
 
@@ -161,6 +183,7 @@ class UserSettingsPatch(BaseModel):
     dinnerEnabled: bool | None = None
     dinnerTime: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     mealNotes: str | None = Field(default=None, max_length=300)
+    assumeMissed: bool | None = None
     # No calendarId here on purpose: it can only be set via /api/calendar/link (ownership-checked).
 
 
@@ -250,3 +273,6 @@ class AIMemory(BaseModel):
 
 class MemoryNoteIn(BaseModel):
     text: str = Field(min_length=1, max_length=280)
+
+
+DayPlan.model_rebuild()

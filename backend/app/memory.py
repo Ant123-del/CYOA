@@ -127,7 +127,7 @@ def _recent_days(uid: str, before: str) -> list[dict]:
                     }
                 )
             else:
-                untouched.append(f"{c.get('start')} {c.get('title', '')}")
+                untouched.append(f"{c.get('start')} {c.get('title', '')}" + (" (missed)" if c.get("missed") else ""))
         out.append(
             {
                 "date": d.get("date"),

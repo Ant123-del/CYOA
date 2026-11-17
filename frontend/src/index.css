@@ -2248,3 +2248,93 @@ button.tmap-opt:hover:not(:disabled) {
   letter-spacing: 0.05em;
   color: var(--c);
 }
+
+/* ---------- missed chapters ---------- */
+.tl-item.missed .tl-body {
+  opacity: 0.6;
+  border-style: dashed;
+}
+.missed-tag {
+  background: color-mix(in srgb, var(--muted) 18%, transparent);
+  color: var(--muted);
+}
+.prompt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ---------- revise with AI ---------- */
+.view-row-end {
+  margin-left: auto;
+}
+.revise h2 {
+  margin-bottom: -6px;
+}
+.revise-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.revise-history li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.you-said,
+.ai-said {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  max-width: 85%;
+  font-size: 0.9rem;
+}
+.you-said {
+  align-self: flex-end;
+  background: var(--accent-soft);
+}
+.ai-said {
+  align-self: flex-start;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.revise-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+}
+.chip:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.revise-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.revise-row > label:first-child:not(.grow) {
+  flex: 0 0 auto;
+  min-width: 180px;
+}
+.revise-row .grow {
+  flex: 1 1 260px;
+}

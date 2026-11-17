@@ -6,6 +6,7 @@ import { useSleep } from '../lib/sleep'
 import { addDays, fmtTime, isoDate, newId, prettyDate } from '../lib/dates'
 import { SourceTag, KindBadge, SwitchTag, calendarNote, timelineLabel } from '../components/Adventure'
 import TimelineMap from '../components/TimelineMap'
+import RevisePanel from '../components/RevisePanel'
 import PlanningScreen from '../components/PlanningScreen'
 import StorylineLanes from '../components/StorylineLanes'
 import ViewToggle, { useDayView } from '../components/ViewToggle'
@@ -419,6 +420,21 @@ export default function Plan() {
               </button>
             </div>
           </div>
+
+          {exists && plan.chapters.length > 0 && (
+            dirty ? (
+              <p className="muted small">Save your edits to revise this day with the AI.</p>
+            ) : (
+              <RevisePanel
+                plan={plan}
+                onPlan={(p) => {
+                  setPlan(p)
+                  setDirty(false)
+                  setNotice('Plan revised ✓')
+                }}
+              />
+            )
+          )}
 
           <div className="storyline-edit">
             {plan.storylines.map((s) => (

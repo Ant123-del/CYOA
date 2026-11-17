@@ -9,7 +9,7 @@ from googleapiclient.errors import HttpError
 from .. import google_calendar as gcal
 from ..auth import CurrentUser, current_user, get_user_settings
 from ..firebase import user_ref
-from ..models import Chapter, ChooseIn, DayPlan, Option
+from ..models import Chapter, ChooseIn, DayPlan, MissedIn, Option
 from ..notifications import clear_reminder, rebuild_reminders
 from ..timeutil import local_dt, minutes_between, new_id, now_iso, tz
 
@@ -183,6 +183,7 @@ def choose(day: str, chapter_id: str, body: ChooseIn, user: CurrentUser = Depend
 
     ch.chosenOptionId = opt.id
     ch.chosenAt = now_iso()
+    ch.missed = False
     if plan.timelines:
         valid = {t.id for t in plan.timelines}
         # The option's storyline thread decides which timeline the day continues on.
@@ -192,6 +193,20 @@ def choose(day: str, chapter_id: str, body: ChooseIn, user: CurrentUser = Depend
     save_day(user.uid, plan, settings)
     clear_reminder(user.uid, day, ch.id)
     return {"plan": plan, "calendar": calendar_status}
+
+
+@router.post("/{day}/chapters/{chapter_id}/missed", response_model=DayPlan)
+def mark_missed(day: str, chapter_id: str, body: MissedIn, user: CurrentUser = Depends(current_user)):
+    """'I missed this' (or undo). Missed chapters leave the path and stop sending reminders."""
+    settings = get_user_settings(user)
+    plan = load_day(user.uid, day)
+    if not plan:
+        raise HTTPException(404, "No plan for this day")
+    ch = _find(plan, chapter_id)
+    if body.missed and ch.chosenOptionId:
+        raise HTTPException(400, "You already chose a path here - use Change course first.")
+    ch.missed = body.missed
+    return save_day(user.uid, plan, settings)
 
 
 @router.post("/{day}/chapters/{chapter_id}/reset", response_model=DayPlan)

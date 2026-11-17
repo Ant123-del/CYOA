@@ -23,7 +23,7 @@ export function doneActivities(plan: DayPlan): Set<string> {
 
 /** Latest end time of anything chosen - the path continues from there. */
 export function cutoff(plan: DayPlan): string {
-  const ends = plan.chapters.filter((c) => c.chosenOptionId).map((c) => c.end)
+  const ends = plan.chapters.filter((c) => c.chosenOptionId || c.missed).map((c) => c.end)
   return ends.length ? ends.sort().at(-1)! : '00:00'
 }
 
@@ -33,15 +33,15 @@ export function upcoming(plan: DayPlan): Chapter[] {
   const tl = currentTimeline(plan)
   const cut = tl ? cutoff(plan) : '00:00'
   return plan.chapters
-    .filter((c) => !c.chosenOptionId && !done.has(activity(c)) && (!tl || (c.timelineId === tl.id && c.start >= cut)))
+    .filter((c) => !c.chosenOptionId && !c.missed && !done.has(activity(c)) && (!tl || (c.timelineId === tl.id && c.start >= cut)))
     .sort((a, b) => a.start.localeCompare(b.start))
 }
 
 /** Your day as lived so far plus what's ahead: chosen chapters (any timeline) + upcoming. */
 export function pathChapters(plan: DayPlan): Chapter[] {
   if (!hasTimelines(plan)) return plan.chapters
-  const chosen = plan.chapters.filter((c) => c.chosenOptionId)
-  return [...chosen, ...upcoming(plan)].sort((a, b) => a.start.localeCompare(b.start))
+  const lived = plan.chapters.filter((c) => c.chosenOptionId || c.missed)
+  return [...lived, ...upcoming(plan)].sort((a, b) => a.start.localeCompare(b.start))
 }
 
 export function timelineById(plan: DayPlan, id?: string | null): Timeline | undefined {

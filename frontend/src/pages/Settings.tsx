@@ -75,6 +75,14 @@ export default function Settings() {
         <button className="btn ghost small" onClick={testEmail}>
           Send test email
         </button>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={settings.assumeMissed !== false}
+            onChange={(e) => patch({ assumeMissed: e.target.checked })}
+          />
+          If a chapter's time passes without a choice, assume I missed it
+        </label>
         <p className="muted small">Changes apply to plans when they're next saved.</p>
       </section>
 

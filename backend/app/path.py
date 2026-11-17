@@ -30,13 +30,14 @@ def upcoming(plan: DayPlan) -> list[Chapter]:
     """Chapters still ahead on the person's current path, in time order."""
     done = done_activities(plan)
     tl = current_timeline(plan)
-    chosen_ends = [c.end for c in plan.chapters if c.chosenOptionId]
+    chosen_ends = [c.end for c in plan.chapters if c.chosenOptionId or c.missed]
     cutoff = max(chosen_ends) if (chosen_ends and tl) else "00:00"
     return sorted(
         (
             c
             for c in plan.chapters
             if not c.chosenOptionId
+            and not c.missed
             and activity(c) not in done
             and (tl is None or c.timelineId == tl)
             and (tl is None or c.start >= cutoff)

@@ -5,6 +5,7 @@ import { useAuth } from '../lib/auth'
 import { addDays, fmtTime, isoDate, nowHM, prettyDate } from '../lib/dates'
 import { SourceTag, KindBadge, StorylineLegend, SwitchTag, TimelineBadge, calendarNote, optionColor } from '../components/Adventure'
 import TimelineMap from '../components/TimelineMap'
+import RevisePanel from '../components/RevisePanel'
 import { currentTimeline, hasTimelines, pathChapters, timelineById } from '../lib/path'
 import StorylineLanes from '../components/StorylineLanes'
 import ViewToggle, { useDayView } from '../components/ViewToggle'
@@ -31,6 +32,12 @@ export default function Today() {
   const [now, setNow] = useState(nowHM())
   const [expanded, setExpanded] = useState<string | null>(null)
   const [view, setView] = useDayView()
+  const [showRevise, setShowRevise] = useState(false)
+  const toggleRevise = () => {
+    const open = !showRevise
+    setShowRevise(open)
+    if (open) setTimeout(() => document.getElementById('revise-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+  }
 
   useEffect(() => {
     const t = setInterval(() => setNow(nowHM()), 30_000)
@@ -76,6 +83,24 @@ export default function Today() {
       const msg = CAL_MSG[res.calendar] ?? `Chosen. (Calendar: ${res.calendar})`
       setToast(moved ? `${msg} Your day now follows “${moved.name}”.` : msg)
       if (focusId) setParams({ date })
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const isPastDay = date < isoDate()
+  // A chapter is missed if they said so, or (by default) if its time passed without a choice.
+  const isMissed = (c: Chapter) =>
+    !c.chosenOptionId && (Boolean(c.missed) || (settings?.assumeMissed !== false && (isPastDay || (isToday && c.end <= now))))
+
+  const setMissed = async (c: Chapter, missed: boolean) => {
+    setBusy(c.id)
+    try {
+      setPlan(await api.setMissed(date, c.id, missed))
+      setExpanded(null)
+      setToast(missed ? 'Marked as missed - no worries.' : 'Back on your path.')
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -175,6 +200,17 @@ export default function Today() {
               </p>
             </div>
           )}
+          {showRevise && (
+            <div id="revise-panel">
+              <RevisePanel
+                plan={plan}
+                onPlan={(p) => {
+                  setPlan(p)
+                  setToast('Plan revised ✓')
+                }}
+              />
+            </div>
+          )}
           <div className="view-row">
             <ViewToggle
               view={view}
@@ -189,6 +225,9 @@ export default function Today() {
                   : 'Each column is one route through your day - follow one, or switch whenever you like.'
                 : 'Your day, chapter by chapter.'}
             </span>
+            <button className="btn ghost small view-row-end" onClick={() => toggleRevise()}>
+              {showRevise ? 'Hide revise panel' : '✏️ Revise with AI'}
+            </button>
           </div>
           {view === 'storylines' ? (
             branching ? (
@@ -206,11 +245,12 @@ export default function Today() {
               const otherTimeline = branching && c.timelineId !== here?.id ? timelineById(plan, c.timelineId) : null
               const isActive = c.id === activeId
               const isPast = isToday && c.end <= now
+              const missed = isMissed(c)
               const isOpen = isActive || expanded === c.id
               return (
                 <li
                   key={c.id}
-                  className={`tl-item${isActive ? ' active' : ''}${isPast ? ' past' : ''}${chosen ? ' done' : ''}`}
+                  className={`tl-item${isActive ? ' active' : ''}${isPast ? ' past' : ''}${chosen ? ' done' : ''}${missed && !isOpen ? ' missed' : ''}`}
                   style={chosen ? ({ '--c': optionColor(chosen, plan.storylines) } as CSSProperties) : undefined}
                 >
                   <div className="tl-marker" />
@@ -239,7 +279,22 @@ export default function Today() {
                       </div>
                     )}
 
-                    {!chosen && !isOpen && (
+                    {missed && !isOpen && (
+                      <div className="chosen-line">
+                        <span className="tag missed-tag">Missed</span>
+                        <span className="chosen-title muted">That's okay - the day moved on.</span>
+                        <button className="btn ghost small" onClick={() => setExpanded(c.id)} disabled={busy !== null}>
+                          Actually, I did this
+                        </button>
+                        {c.missed && (
+                          <button className="btn ghost small" onClick={() => setMissed(c, false)} disabled={busy !== null}>
+                            Undo
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {!chosen && !missed && !isOpen && (
                       <div className="preview-line">
                         {c.options.map((o) => (
                           <span key={o.id} className="preview-opt">
@@ -252,7 +307,16 @@ export default function Today() {
 
                     {isOpen && (
                       <>
-                        {!chosen && <p className="prompt">Which way does the story go?</p>}
+                        {!chosen && (
+                          <div className="prompt-row">
+                            <p className="prompt">{missed ? 'Which way did it go?' : 'Which way does the story go?'}</p>
+                            {!c.missed && (
+                              <button className="btn ghost small" onClick={() => setMissed(c, true)} disabled={busy !== null}>
+                                I missed this
+                              </button>
+                            )}
+                          </div>
+                        )}
                         <div className="paths">
                           {c.options.map((o) => (
                             <button
@@ -283,6 +347,9 @@ export default function Today() {
             </>
           )}
           <div className="foot-actions">
+            <button className="btn ghost small" onClick={() => toggleRevise()}>
+              {showRevise ? 'Hide revise panel' : '✏️ Revise with AI'}
+            </button>
             <Link className="btn ghost small" to={`/plan?date=${date}`}>
               Edit this day's plan
             </Link>

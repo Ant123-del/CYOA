@@ -69,6 +69,10 @@ export const api = {
       optionId,
       addToCalendar,
     }),
+  setMissed: (date: string, chapterId: string, missed: boolean) =>
+    request<DayPlan>('POST', `/api/days/${date}/chapters/${chapterId}/missed`, { missed }),
+  revise: (date: string, feedback: string, timelineId: string | null, rewrite = false) =>
+    request<{ plan: DayPlan; reply: string; applied: number }>('POST', '/api/ai/revise', { date, feedback, timelineId, rewrite }),
   resetChoice: (date: string, chapterId: string) =>
     request<DayPlan>('POST', `/api/days/${date}/chapters/${chapterId}/reset`),
 

@@ -3,9 +3,9 @@ from datetime import date as date_cls
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from .. import ai, memory, plan_jobs
+from .. import ai, memory, plan_jobs, revise
 from ..auth import CurrentUser, current_user, get_user_settings
-from ..models import AIMemory, ChapterOptionsIn, DayPlan, MemoryNoteIn, PlanDayIn
+from ..models import AIMemory, ChapterOptionsIn, DayPlan, MemoryNoteIn, PlanDayIn, ReviseIn
 from .days import load_day, save_day
 
 log = logging.getLogger("cyoa.ai.router")
@@ -43,6 +43,38 @@ def get_plan_job(job_id: str, user: CurrentUser = Depends(current_user)):
     if not job:
         raise HTTPException(404, "Job not found")
     return job
+
+
+@router.post("/revise")
+def revise_day(body: ReviseIn, user: CurrentUser = Depends(current_user)):
+    """Feedback on an existing day ("commute is ~10 min") -> small AI edits + a reply.
+    Optionally only one timeline, or rewrite one timeline from scratch."""
+    settings = get_user_settings(user)
+    plan = load_day(user.uid, body.date)
+    if not plan:
+        raise HTTPException(404, "No plan for this day")
+    try:
+        plan, reply, applied, learned = revise.revise(
+            plan=plan,
+            settings=settings,
+            feedback=body.feedback,
+            timeline_id=body.timelineId,
+            rewrite=body.rewrite,
+            memory_ctx=memory.context_for(user.uid, body.date),
+            sleep_ctx=_sleep_context(user.uid, settings),
+        )
+    except ai.AIError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    saved = save_day(user.uid, plan, settings)
+    memory.record(
+        user.uid,
+        kind="revise",
+        day=body.date,
+        text=body.feedback,
+        learned=learned.learned,
+        outdated_ids=learned.outdated_note_ids,
+    )
+    return {"plan": saved, "reply": reply, "applied": applied}
 
 
 @router.post("/plan-jobs/{job_id}/run")
