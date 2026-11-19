@@ -242,6 +242,17 @@ export function ManifestationForm({
   )
 }
 
+/** The original problem, shown alongside its corrected manifestation. */
+export function ProblemNote({ item }: { item: Manifestation }) {
+  if (item.kind !== 'complicated' || !item.problem) return null
+  return (
+    <div className="problem-note">
+      <span className="muted small">The original problem</span>
+      <p>{item.problem}</p>
+    </div>
+  )
+}
+
 type Step =
   | { name: 'feeling' }
   | { name: 'list'; kind: ManifestationKind }
@@ -253,10 +264,14 @@ export function HopeCheckIn({
   taskTitle,
   onContinue,
   onCancel,
+  context = 'Before you start',
+  continueLabel = 'Continue →',
 }: {
   taskTitle: string
-  onContinue: () => void
+  onContinue: (item: Manifestation | null) => void
   onCancel: () => void
+  context?: string
+  continueLabel?: string
 }) {
   const [items, setItems] = useState<Manifestation[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -281,8 +296,10 @@ export function HopeCheckIn({
     <div className="modal-backdrop" onClick={onCancel}>
       <div className="modal hope-checkin" onClick={(e) => e.stopPropagation()}>
         <div className="checkin-head">
-          <span className="muted small">Before you start: {taskTitle}</span>
-          <button className="btn ghost small" onClick={onContinue}>
+          <span className="muted small">
+            {context}: {taskTitle}
+          </span>
+          <button className="btn ghost small" onClick={() => onContinue(null)}>
             Skip
           </button>
         </div>
@@ -350,6 +367,7 @@ export function HopeCheckIn({
         {step.name === 'show' && (
           <>
             <h2>{step.item.title}</h2>
+            <ProblemNote item={step.item} />
             {step.item.kind === 'complicated' ? (
               step.item.corrected ? (
                 <div className="mantra">
@@ -375,8 +393,8 @@ export function HopeCheckIn({
                 ‹ Back
               </button>
               <span className="spacer" />
-              <button className="btn primary" onClick={onContinue}>
-                Continue →
+              <button className="btn primary" onClick={() => onContinue(step.item)}>
+                {continueLabel}
               </button>
             </div>
           </>

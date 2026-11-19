@@ -2606,3 +2606,69 @@ button.tmap-opt:hover:not(:disabled) {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- hope: struggle mode ---------- */
+.struggle-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 20px;
+}
+.struggle-card h2 {
+  margin: 0 0 4px;
+  font-size: 1.1rem;
+}
+.struggle-card p {
+  margin: 0;
+}
+.struggle-card .btn {
+  flex-shrink: 0;
+}
+.modal.struggle {
+  width: min(640px, 100%);
+}
+.struggle h2 {
+  margin: 0;
+  font-family: var(--display);
+}
+.struggle-options {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.struggle-chapter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.struggle-chapter-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+@media (max-width: 560px) {
+  .struggle-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.problem-note {
+  border-left: 3px solid var(--low);
+  background: var(--surface-2);
+  border-radius: 0 10px 10px 0;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.problem-note p {
+  margin: 0;
+  white-space: pre-wrap;
+}

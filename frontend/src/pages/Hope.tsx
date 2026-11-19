@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { KIND_META, ManifestationForm, blankManifestation } from '../components/Manifestations'
+import { StruggleMode } from '../components/Struggle'
 import type { Manifestation, ManifestationInput, ManifestationKind } from '../types'
 
 export default function Hope() {
@@ -8,6 +9,7 @@ export default function Hope() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState<{ id: string | null; data: ManifestationInput } | null>(null)
+  const [struggling, setStruggling] = useState(false)
 
   useEffect(() => {
     api
@@ -98,11 +100,29 @@ export default function Hope() {
           {error}
         </div>
       )}
+      <div className="struggle-card">
+        <div>
+          <h2>Struggle mode</h2>
+          <p className="muted small">In the middle of a task and it's not going well? Check in, hear your corrected manifestation, then stay with it or switch.</p>
+        </div>
+        <button className="btn primary" onClick={() => setStruggling(true)}>
+          I'm struggling
+        </button>
+      </div>
       {loading && <p className="muted">Loading…</p>}
       <div className="hope-grid">
         {section('complicated')}
         {section('positive')}
       </div>
+
+      {struggling && (
+        <StruggleMode
+          onClose={() => {
+            setStruggling(false)
+            api.manifestations().then(setItems).catch(() => {}) // pick up any added during the check-in
+          }}
+        />
+      )}
 
       {editing && (
         <div className="modal-backdrop" onClick={() => setEditing(null)}>
