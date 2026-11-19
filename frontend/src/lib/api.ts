@@ -9,6 +9,8 @@ import type {
   DaySummary,
   Goal,
   GoalInput,
+  Manifestation,
+  ManifestationInput,
   PlanJob,
   SleepSummary,
   UserSettings,
@@ -109,6 +111,14 @@ export const api = {
   sleepWake: (at?: string) => request<SleepSummary>('POST', '/api/sleep/wake', { at: at ?? null }),
   sleepLog: (start: string, end: string) => request<SleepSummary>('POST', '/api/sleep/log', { start, end }),
   sleepDelete: (id: string) => request<SleepSummary>('DELETE', `/api/sleep/${id}`),
+
+  manifestations: () => request<Manifestation[]>('GET', '/api/manifestations'),
+  createManifestation: (m: ManifestationInput) => request<Manifestation>('POST', '/api/manifestations', m),
+  updateManifestation: (id: string, patch: Partial<Omit<ManifestationInput, 'kind'>>) =>
+    request<Manifestation>('PATCH', `/api/manifestations/${id}`, patch),
+  deleteManifestation: (id: string) => request<{ ok: boolean }>('DELETE', `/api/manifestations/${id}`),
+  suggestCorrected: (title: string, description: string) =>
+    request<{ suggestions: string[] }>('POST', '/api/manifestations/suggest', { title, description }),
 
   events: (date: string) => request<CalendarEvent[]>('GET', `/api/calendar/events?date=${date}`),
 }

@@ -6,6 +6,7 @@ const links = [
   { to: '/today', label: 'Today', icon: '🧭' },
   { to: '/plan', label: 'Plan', icon: '🗺️' },
   { to: '/board', label: 'Board', icon: '📋' },
+  { to: '/hope', label: 'Hope', icon: '🕯️' },
   { to: '/settings', label: 'Settings', icon: '⚙️' },
 ]
 

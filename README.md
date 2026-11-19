@@ -9,6 +9,8 @@ When a chapter is about to start, you get an email. You pick a path, and it goes
 
 **Sleep:** tap **🌙 Going to sleep** in the top bar before bed (you can cancel it if you don't end up sleeping), then **☀️ Woke up** in the morning, or enter the time you actually woke. CYOA tracks last night's sleep and a 7-night sleep debt against your goal (set in Settings), and suggests a wind-down time and a bedtime. The AI uses this when it plans: on short sleep you get lighter routes, the hard work goes earlier, and the day wraps up in time for bed.
 
+**Hope:** the **Hope** tab keeps two logs: **negative** and **positive** manifestations, each with a title and a description. Writing a thought down is the acceptance step. Each negative one can also have a **corrected manifestation**: the words you repeat to yourself. **✨ Suggest** reads the description and offers 5 to choose from (or none of them). That is the only AI in Hope, and manifestations are never shared with the day planner. Before you choose a path on Today, CYOA asks which manifestations are feeding into you (positive or negative), lists that log's titles (plus **New +**), and shows the one you pick: the corrected manifestation for a negative one, the description for a positive one.
+
 ```
 CYOA/
 ├── frontend/   React + TypeScript (Vite), Firebase Auth (Google sign-in)  → deployed on Vercel

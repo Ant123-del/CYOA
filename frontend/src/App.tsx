@@ -7,6 +7,7 @@ import Board from './pages/Board'
 import Plan from './pages/Plan'
 import Today from './pages/Today'
 import Settings from './pages/Settings'
+import Hope from './pages/Hope'
 
 export default function App() {
   const { user, loading } = useAuth()
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="/today" element={<Today />} />
           <Route path="/plan" element={<Plan />} />
           <Route path="/board" element={<Board />} />
+          <Route path="/hope" element={<Hope />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/today" replace />} />
         </Route>

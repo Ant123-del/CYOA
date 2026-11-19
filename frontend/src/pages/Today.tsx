@@ -10,6 +10,7 @@ import { currentTimeline, hasTimelines, pathChapters, timelineById } from '../li
 import StorylineLanes from '../components/StorylineLanes'
 import ViewToggle, { useDayView } from '../components/ViewToggle'
 import { SleepCard } from '../components/Sleep'
+import { HopeCheckIn } from '../components/Manifestations'
 import type { Chapter, DayPlan } from '../types'
 
 const CAL_MSG: Record<string, string> = {
@@ -33,6 +34,10 @@ export default function Today() {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [view, setView] = useDayView()
   const [showRevise, setShowRevise] = useState(false)
+  // A task waiting on the Hope check-in ("what manifestations are feeding into you?").
+  // optionId is set when they went straight for a path (e.g. in the storylines view).
+  const [pending, setPending] = useState<{ chapter: Chapter; optionId: string | null } | null>(null)
+  const [checkedIn, setCheckedIn] = useState<Set<string>>(() => new Set())
   const toggleRevise = () => {
     const open = !showRevise
     setShowRevise(open)
@@ -72,7 +77,7 @@ export default function Today() {
     return chapters.find((c) => c.start >= now && !c.chosenOptionId)?.id ?? null
   }, [plan, chapters, now, isToday, focusId])
 
-  const choose = async (c: Chapter, optionId: string) => {
+  const commitChoice = async (c: Chapter, optionId: string) => {
     setBusy(optionId)
     try {
       const before = plan?.currentTimelineId
@@ -94,6 +99,22 @@ export default function Today() {
   // A chapter is missed if they said so, or (by default) if its time passed without a choice.
   const isMissed = (c: Chapter) =>
     !c.chosenOptionId && (Boolean(c.missed) || (settings?.assumeMissed !== false && (isPastDay || (isToday && c.end <= now))))
+  // Check in with your manifestations when you open a task. Chosen and missed chapters
+  // skip it - looking back or logging after the fact isn't starting something.
+  const needsCheckIn = (c: Chapter) => !c.chosenOptionId && !isMissed(c) && !checkedIn.has(c.id)
+
+  const toggleChapter = (c: Chapter) => {
+    if (expanded === c.id) return setExpanded(null)
+    if (needsCheckIn(c)) return setPending({ chapter: c, optionId: null })
+    setExpanded(c.id)
+  }
+
+  // Paths can also be picked without opening the task first (storylines view, the
+  // auto-opened current chapter) - check in then instead.
+  const choose = (c: Chapter, optionId: string) => {
+    if (!needsCheckIn(c)) return commitChoice(c, optionId)
+    setPending({ chapter: c, optionId })
+  }
 
   const setMissed = async (c: Chapter, missed: boolean) => {
     setBusy(c.id)
@@ -259,7 +280,7 @@ export default function Today() {
                     <span>{fmtTime(c.end)}</span>
                   </div>
                   <div className="tl-body">
-                    <div className="tl-head" onClick={() => !isActive && setExpanded(expanded === c.id ? null : c.id)}>
+                    <div className="tl-head" onClick={() => !isActive && toggleChapter(c)}>
                       <h3>
                         {c.title}
                         <SourceTag chapter={c} />
@@ -355,6 +376,20 @@ export default function Today() {
             </Link>
           </div>
         </>
+      )}
+
+      {pending && (
+        <HopeCheckIn
+          taskTitle={pending.chapter.options.find((o) => o.id === pending.optionId)?.title ?? pending.chapter.title}
+          onCancel={() => setPending(null)}
+          onContinue={() => {
+            const p = pending
+            setPending(null)
+            setCheckedIn((s) => new Set(s).add(p.chapter.id))
+            if (p.optionId) commitChoice(p.chapter, p.optionId)
+            else setExpanded(p.chapter.id)
+          }}
+        />
       )}
 
       {toast && <div className="toast">{toast}</div>}

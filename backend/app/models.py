@@ -275,4 +275,37 @@ class MemoryNoteIn(BaseModel):
     text: str = Field(min_length=1, max_length=280)
 
 
+# ---------- Hope: manifestations ----------
+
+ManifestationKind = Literal["negative", "positive"]
+
+
+class ManifestationIn(BaseModel):
+    kind: ManifestationKind
+    title: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=4000)
+    corrected: str = Field(default="", max_length=600)  # negative only: the words to repeat to yourself
+
+
+class ManifestationPatch(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=4000)
+    corrected: str | None = Field(default=None, max_length=600)
+
+
+class Manifestation(ManifestationIn):
+    id: str
+    createdAt: str | None = None
+    updatedAt: str | None = None
+
+
+class CorrectedSuggestIn(BaseModel):
+    title: str = Field(default="", max_length=120)
+    description: str = Field(min_length=1, max_length=4000)
+
+
+class CorrectedSuggestions(BaseModel):
+    suggestions: list[str]
+
+
 DayPlan.model_rebuild()

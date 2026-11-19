@@ -254,20 +254,20 @@ Memory (the "memory" field) - you are the same planner every day, and you know t
 """
 
 
-def _call(output_model: type[BaseModel], user_content: str, max_tokens: int = 16000):
+def _call(output_model: type[BaseModel], user_content: str, max_tokens: int = 16000, system: str = SYSTEM_PROMPT):
     """Use Gemini when GEMINI_API_KEY is set, otherwise Claude."""
     s = get_settings()
     if s.gemini_api_key:
-        return _call_gemini(output_model, user_content, max_tokens)
+        return _call_gemini(output_model, user_content, max_tokens, system)
     if s.anthropic_api_key:
-        return _call_claude(output_model, user_content, max_tokens)
+        return _call_claude(output_model, user_content, max_tokens, system)
     raise AIError("No AI key configured: set GEMINI_API_KEY (or ANTHROPIC_API_KEY) for the backend.")
 
 
 GEMINI_MAX_OUTPUT_TOKENS = 65536
 
 
-def _call_gemini(output_model: type[BaseModel], user_content: str, max_tokens: int):
+def _call_gemini(output_model: type[BaseModel], user_content: str, max_tokens: int, system: str = SYSTEM_PROMPT):
     from google import genai
     from google.genai import errors, types
 
@@ -278,7 +278,7 @@ def _call_gemini(output_model: type[BaseModel], user_content: str, max_tokens: i
             model=s.gemini_model,
             contents=user_content,
             config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
+                system_instruction=system,
                 response_mime_type="application/json",
                 response_schema=output_model,
                 # Gemini counts its internal thinking against this limit too, so leave lots of room:
@@ -326,7 +326,7 @@ def _call_gemini(output_model: type[BaseModel], user_content: str, max_tokens: i
         raise AIError("The AI response was incomplete - please try again.") from exc
 
 
-def _call_claude(output_model: type[BaseModel], user_content: str, max_tokens: int):
+def _call_claude(output_model: type[BaseModel], user_content: str, max_tokens: int, system: str = SYSTEM_PROMPT):
     s = get_settings()
     try:
         response = anthropic.Anthropic(api_key=s.anthropic_api_key).beta.messages.parse(
@@ -335,7 +335,7 @@ def _call_claude(output_model: type[BaseModel], user_content: str, max_tokens: i
             betas=["server-side-fallback-2026-07-01"],
             fallbacks="default",  # re-run on a fallback model if the request is declined
             output_config={"effort": "medium"},
-            system=SYSTEM_PROMPT,
+            system=system,
             messages=[{"role": "user", "content": user_content}],
             output_format=output_model,
         )

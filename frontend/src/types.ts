@@ -215,3 +215,19 @@ export interface PlanJob {
   notifyEmail: boolean
   createdAt: string | null
 }
+
+// ---------- Hope: manifestations ----------
+
+export type ManifestationKind = 'negative' | 'positive'
+
+export interface Manifestation {
+  id: string
+  kind: ManifestationKind
+  title: string
+  description: string
+  corrected: string // negative only: the words to repeat to yourself
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+export type ManifestationInput = Pick<Manifestation, 'kind' | 'title' | 'description' | 'corrected'>
