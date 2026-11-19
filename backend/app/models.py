@@ -1,6 +1,6 @@
 """API / storage models (camelCase, matching the frontend)."""
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
@@ -277,19 +277,26 @@ class MemoryNoteIn(BaseModel):
 
 # ---------- Hope: manifestations ----------
 
-ManifestationKind = Literal["negative", "positive"]
+ManifestationKind = Literal["complicated", "positive"]
+
+NaturalList = list[Annotated[str, Field(min_length=1, max_length=300)]]
 
 
 class ManifestationIn(BaseModel):
     kind: ManifestationKind
     title: str = Field(min_length=1, max_length=120)
-    description: str = Field(default="", max_length=4000)
-    corrected: str = Field(default="", max_length=600)  # negative only: the words to repeat to yourself
+    description: str = Field(default="", max_length=4000)  # positive only
+    # complicated only:
+    problem: str = Field(default="", max_length=2000)  # the stressor, as unbiased as possible
+    naturalManifestations: NaturalList = Field(default_factory=list, max_length=30)  # what comes with it
+    corrected: str = Field(default="", max_length=600)  # the words to repeat to yourself
 
 
 class ManifestationPatch(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=120)
     description: str | None = Field(default=None, max_length=4000)
+    problem: str | None = Field(default=None, max_length=2000)
+    naturalManifestations: NaturalList | None = Field(default=None, max_length=30)
     corrected: str | None = Field(default=None, max_length=600)
 
 
@@ -301,7 +308,8 @@ class Manifestation(ManifestationIn):
 
 class CorrectedSuggestIn(BaseModel):
     title: str = Field(default="", max_length=120)
-    description: str = Field(min_length=1, max_length=4000)
+    problem: str = Field(min_length=1, max_length=2000)
+    naturalManifestations: NaturalList = Field(default_factory=list, max_length=30)
 
 
 class CorrectedSuggestions(BaseModel):

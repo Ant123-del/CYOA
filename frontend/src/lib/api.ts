@@ -117,8 +117,8 @@ export const api = {
   updateManifestation: (id: string, patch: Partial<Omit<ManifestationInput, 'kind'>>) =>
     request<Manifestation>('PATCH', `/api/manifestations/${id}`, patch),
   deleteManifestation: (id: string) => request<{ ok: boolean }>('DELETE', `/api/manifestations/${id}`),
-  suggestCorrected: (title: string, description: string) =>
-    request<{ suggestions: string[] }>('POST', '/api/manifestations/suggest', { title, description }),
+  suggestCorrected: (title: string, problem: string, naturalManifestations: string[]) =>
+    request<{ suggestions: string[] }>('POST', '/api/manifestations/suggest', { title, problem, naturalManifestations }),
 
   events: (date: string) => request<CalendarEvent[]>('GET', `/api/calendar/events?date=${date}`),
 }

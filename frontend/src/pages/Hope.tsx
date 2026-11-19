@@ -46,11 +46,29 @@ export default function Hope() {
             <li key={m.id}>
               <button
                 className="hope-card"
-                onClick={() => setEditing({ id: m.id, data: { kind: m.kind, title: m.title, description: m.description, corrected: m.corrected } })}
+                onClick={() =>
+                  setEditing({
+                    id: m.id,
+                    data: {
+                      kind: m.kind,
+                      title: m.title,
+                      description: m.description,
+                      problem: m.problem,
+                      naturalManifestations: m.naturalManifestations,
+                      corrected: m.corrected,
+                    },
+                  })
+                }
               >
                 <span className="hope-title">{m.title}</span>
-                {m.description && <span className="hope-desc">{m.description}</span>}
-                {kind === 'negative' &&
+                {kind === 'positive' && m.description && <span className="hope-desc">{m.description}</span>}
+                {kind === 'complicated' && m.problem && <span className="hope-desc">{m.problem}</span>}
+                {kind === 'complicated' && m.naturalManifestations.length > 0 && (
+                  <span className="muted small">
+                    {m.naturalManifestations.length} natural manifestation{m.naturalManifestations.length === 1 ? '' : 's'}
+                  </span>
+                )}
+                {kind === 'complicated' &&
                   (m.corrected ? (
                     <span className="hope-corrected">
                       <span className="muted small">Corrected</span>
@@ -82,15 +100,15 @@ export default function Hope() {
       )}
       {loading && <p className="muted">Loading…</p>}
       <div className="hope-grid">
-        {section('negative')}
+        {section('complicated')}
         {section('positive')}
       </div>
 
       {editing && (
         <div className="modal-backdrop" onClick={() => setEditing(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal hope-modal" onClick={(e) => e.stopPropagation()}>
             <h2>
-              {editing.id ? 'Edit' : 'New'} {editing.data.kind} manifestation
+              {editing.id ? 'Edit' : 'New'} {KIND_META[editing.data.kind].label.toLowerCase()} manifestation
             </h2>
             <ManifestationForm
               id={editing.id}

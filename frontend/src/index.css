@@ -2431,8 +2431,47 @@ button.tmap-opt:hover:not(:disabled) {
 .corrected-field label {
   width: 100%;
 }
+.natural-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.natural-field label .muted,
 .corrected-field label .muted {
   font-weight: 400;
+}
+.natural-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.natural-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--low);
+  border-radius: 8px;
+  padding: 6px 6px 6px 10px;
+  font-size: 0.92rem;
+}
+.natural-list li span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.natural-add {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.natural-add input {
+  flex: 1;
+  min-width: 0;
 }
 .suggest-list {
   width: 100%;
@@ -2464,7 +2503,8 @@ button.tmap-opt:hover:not(:disabled) {
   border-style: dashed;
 }
 
-.modal.hope-checkin {
+.modal.hope-checkin,
+.modal.hope-modal {
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
 }
@@ -2499,7 +2539,7 @@ button.tmap-opt:hover:not(:disabled) {
   gap: 6px;
   cursor: pointer;
 }
-.feeling-btn.negative {
+.feeling-btn.complicated {
   --c: var(--low);
 }
 .feeling-btn:hover {

@@ -218,16 +218,18 @@ export interface PlanJob {
 
 // ---------- Hope: manifestations ----------
 
-export type ManifestationKind = 'negative' | 'positive'
+export type ManifestationKind = 'complicated' | 'positive'
 
 export interface Manifestation {
   id: string
   kind: ManifestationKind
   title: string
-  description: string
-  corrected: string // negative only: the words to repeat to yourself
+  description: string // positive only
+  problem: string // complicated only: the stressor, as unbiased as possible
+  naturalManifestations: string[] // complicated only: the thoughts that come with it
+  corrected: string // complicated only: the words to repeat to yourself
   createdAt?: string | null
   updatedAt?: string | null
 }
 
-export type ManifestationInput = Pick<Manifestation, 'kind' | 'title' | 'description' | 'corrected'>
+export type ManifestationInput = Pick<Manifestation, 'kind' | 'title' | 'description' | 'problem' | 'naturalManifestations' | 'corrected'>

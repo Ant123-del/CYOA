@@ -3,10 +3,10 @@ import { api } from '../lib/api'
 import type { Manifestation, ManifestationInput, ManifestationKind } from '../types'
 
 export const KIND_META: Record<ManifestationKind, { label: string; icon: string; blurb: string }> = {
-  negative: {
-    label: 'Negative',
+  complicated: {
+    label: 'Complicated',
     icon: '🌧',
-    blurb: 'Name it and write it down. That alone is acceptance. Then give it words to answer with.',
+    blurb: 'Name the problem as it is, and the thoughts that come with it. That alone is acceptance. Then give it words to answer with.',
   },
   positive: {
     label: 'Positive',
@@ -19,6 +19,8 @@ export const blankManifestation = (kind: ManifestationKind): ManifestationInput 
   kind,
   title: '',
   description: '',
+  problem: '',
+  naturalManifestations: [],
   corrected: '',
 })
 
@@ -42,13 +44,23 @@ export function ManifestationForm({
   const [suggesting, setSuggesting] = useState(false)
   const [suggestions, setSuggestions] = useState<string[] | null>(null)
   const [beforeSuggest, setBeforeSuggest] = useState('')
-  const negative = data.kind === 'negative'
+  const [natural, setNatural] = useState('')
+  const complicated = data.kind === 'complicated'
+
+  const addNatural = () => {
+    const t = natural.trim()
+    if (!t) return
+    setData({ ...data, naturalManifestations: [...data.naturalManifestations, t] })
+    setNatural('')
+  }
+  const removeNatural = (i: number) =>
+    setData({ ...data, naturalManifestations: data.naturalManifestations.filter((_, j) => j !== i) })
 
   const suggest = async () => {
     setSuggesting(true)
     setError(null)
     try {
-      const res = await api.suggestCorrected(data.title, data.description)
+      const res = await api.suggestCorrected(data.title, data.problem, pendingNaturals())
       if (suggestions === null) setBeforeSuggest(data.corrected)
       setSuggestions(res.suggestions)
     } catch (e) {
@@ -63,13 +75,18 @@ export function ManifestationForm({
     setSuggestions(null)
   }
 
+  // Something typed in the natural-manifestation box but not added yet still counts.
+  const pendingNaturals = () => (natural.trim() ? [...data.naturalManifestations, natural.trim()] : data.naturalManifestations)
+
   const save = async () => {
     if (!data.title.trim()) return
     setSaving(true)
     setError(null)
     try {
-      const body = { title: data.title.trim(), description: data.description.trim(), corrected: data.corrected.trim() }
-      const saved = id ? await api.updateManifestation(id, body) : await api.createManifestation({ ...body, kind: data.kind })
+      const body = complicated
+        ? { title: data.title.trim(), problem: data.problem.trim(), naturalManifestations: pendingNaturals(), corrected: data.corrected.trim() }
+        : { title: data.title.trim(), description: data.description.trim() }
+      const saved = id ? await api.updateManifestation(id, body) : await api.createManifestation({ ...blankManifestation(data.kind), ...body })
       onSaved(saved)
     } catch (e) {
       setError((e as Error).message)
@@ -95,23 +112,75 @@ export function ManifestationForm({
         <input
           autoFocus
           maxLength={120}
-          placeholder={negative ? 'e.g. "I always fall behind"' : 'e.g. "I finished the hard thing"'}
+          placeholder={complicated ? 'e.g. "Chem midterm"' : 'e.g. "I finished the hard thing"'}
           value={data.title}
           onChange={(e) => setData({ ...data, title: e.target.value })}
         />
       </label>
-      <label>
-        Description
-        <textarea
-          rows={4}
-          maxLength={4000}
-          placeholder={negative ? "What's going on in your head? Write it as it is." : 'What happened, and how did it feel?'}
-          value={data.description}
-          onChange={(e) => setData({ ...data, description: e.target.value })}
-        />
-      </label>
+      {complicated ? (
+        <>
+          <label>
+            The unbiased problem
+            <span className="muted small">The stressor itself, as plainly and fairly as you can put it. Just the facts.</span>
+            <textarea
+              rows={3}
+              maxLength={2000}
+              placeholder="e.g. I scored 58% on my chem midterm. The final is in 4 weeks and is worth 40%."
+              value={data.problem}
+              onChange={(e) => setData({ ...data, problem: e.target.value })}
+            />
+          </label>
+          <div className="natural-field">
+            <label htmlFor="natural-input">
+              Natural manifestations
+              <span className="muted small">The thoughts that come along with it, on their own. Add them one at a time.</span>
+            </label>
+            {data.naturalManifestations.length > 0 && (
+              <ul className="natural-list">
+                {data.naturalManifestations.map((t, i) => (
+                  <li key={`${i}-${t}`}>
+                    <span>{t}</span>
+                    <button type="button" className="icon-btn" aria-label={`Remove "${t}"`} onClick={() => removeNatural(i)}>
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="natural-add">
+              <input
+                id="natural-input"
+                maxLength={300}
+                placeholder={data.naturalManifestations.length ? 'Another one…' : 'e.g. I’m not smart enough for this'}
+                value={natural}
+                onChange={(e) => setNatural(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    addNatural()
+                  }
+                }}
+              />
+              <button type="button" className="btn ghost small" onClick={addNatural} disabled={!natural.trim()}>
+                Add
+              </button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <label>
+          Description
+          <textarea
+            rows={4}
+            maxLength={4000}
+            placeholder="What happened, and how did it feel?"
+            value={data.description}
+            onChange={(e) => setData({ ...data, description: e.target.value })}
+          />
+        </label>
+      )}
 
-      {negative && (
+      {complicated && (
         <div className="corrected-field">
           <label>
             Corrected manifestation
@@ -128,10 +197,10 @@ export function ManifestationForm({
             type="button"
             className="btn ghost small"
             onClick={suggest}
-            disabled={suggesting || !data.description.trim()}
-            title={data.description.trim() ? undefined : 'Write a description first'}
+            disabled={suggesting || !data.problem.trim()}
+            title={data.problem.trim() ? undefined : 'Write the unbiased problem first'}
           >
-            {suggesting ? 'Thinking…' : suggestions ? '✨ Suggest 5 more' : '✨ Suggest 5 from the description'}
+            {suggesting ? 'Thinking…' : suggestions ? '✨ Suggest 5 more' : '✨ Suggest 5'}
           </button>
           {suggestions && (
             <div className="suggest-list" role="radiogroup" aria-label="Suggested corrected manifestations">
@@ -223,7 +292,7 @@ export function HopeCheckIn({
           <>
             <h2>What manifestations do you feel feeding into you?</h2>
             <div className="feeling-row">
-              {(['positive', 'negative'] as const).map((k) => (
+              {(['positive', 'complicated'] as const).map((k) => (
                 <button key={k} className={`feeling-btn ${k}`} onClick={() => setStep({ name: 'list', kind: k })}>
                   <span className="feeling-icon" aria-hidden>
                     {KIND_META[k].icon}
@@ -238,7 +307,7 @@ export function HopeCheckIn({
         {step.name === 'list' && (
           <>
             <h2>
-              {KIND_META[step.kind].icon} Which {step.kind} one?
+              {KIND_META[step.kind].icon} Which {KIND_META[step.kind].label.toLowerCase()} one?
             </h2>
             {items === null ? (
               <p className="muted">Loading…</p>
@@ -267,7 +336,7 @@ export function HopeCheckIn({
         {step.name === 'form' && (
           <>
             <h2>
-              {step.item ? 'Edit' : 'New'} {step.kind} manifestation
+              {step.item ? 'Edit' : 'New'} {KIND_META[step.kind].label.toLowerCase()} manifestation
             </h2>
             <ManifestationForm
               id={step.item?.id ?? null}
@@ -281,7 +350,7 @@ export function HopeCheckIn({
         {step.name === 'show' && (
           <>
             <h2>{step.item.title}</h2>
-            {step.item.kind === 'negative' ? (
+            {step.item.kind === 'complicated' ? (
               step.item.corrected ? (
                 <div className="mantra">
                   <span className="muted small">Repeat to yourself</span>
@@ -290,7 +359,7 @@ export function HopeCheckIn({
               ) : (
                 <div className="mantra empty-mantra">
                   <p className="muted">There's no corrected manifestation for this one yet.</p>
-                  <button className="btn ghost small" onClick={() => setStep({ name: 'form', kind: 'negative', item: step.item })}>
+                  <button className="btn ghost small" onClick={() => setStep({ name: 'form', kind: 'complicated', item: step.item })}>
                     Write one
                   </button>
                 </div>
