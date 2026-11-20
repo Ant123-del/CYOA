@@ -218,18 +218,24 @@ export interface PlanJob {
 
 // ---------- Hope: manifestations ----------
 
-export type ManifestationKind = 'complicated' | 'positive'
+/** "goal" is an ultimate goal in life (older "positive" manifestations are read as goals). */
+export type ManifestationKind = 'complicated' | 'goal'
 
 export interface Manifestation {
   id: string
   kind: ManifestationKind
   title: string
-  description: string // positive only
+  description: string // goal only
+  evidence: string[] // goal only: progress already made, or what makes you grateful for where you are
   problem: string // complicated only: the stressor, as unbiased as possible
   naturalManifestations: string[] // complicated only: the thoughts that come with it
   corrected: string // complicated only: the words to repeat to yourself
+  goalId: string // complicated only: the ultimate goal it leads toward
   createdAt?: string | null
   updatedAt?: string | null
 }
 
-export type ManifestationInput = Pick<Manifestation, 'kind' | 'title' | 'description' | 'problem' | 'naturalManifestations' | 'corrected'>
+export type ManifestationInput = Pick<
+  Manifestation,
+  'kind' | 'title' | 'description' | 'evidence' | 'problem' | 'naturalManifestations' | 'corrected' | 'goalId'
+>

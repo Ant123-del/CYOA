@@ -38,13 +38,15 @@ function alternatives(plan: DayPlan, now: string, current: Choice | null): Chapt
     .sort((a, b) => a.start.localeCompare(b.start) || (a.timelineId ?? '').localeCompare(b.timelineId ?? ''))
 }
 
+type Held = { item: Manifestation | null; goal: Manifestation | null }
+
 type Phase =
   | { name: 'checkin' }
-  | { name: 'reflect'; item: Manifestation | null }
-  | { name: 'switch'; item: Manifestation | null }
+  | ({ name: 'reflect' } & Held)
+  | ({ name: 'switch' } & Held)
   | { name: 'done'; title: string; note: string }
 
-/** Struggle mode: check in during a task, hear your corrected manifestation, then stay or switch. */
+/** Struggle mode: check in during a task, hear your corrected manifestation, take the tiny step toward your goal, then stay or switch. */
 export function StruggleMode({ onClose }: { onClose: () => void }) {
   const date = isoDate()
   const [plan, setPlan] = useState<DayPlan | null | undefined>(undefined)
@@ -90,25 +92,28 @@ export function StruggleMode({ onClose }: { onClose: () => void }) {
         taskTitle={plan === undefined ? '…' : current ? current.option.title : 'right now'}
         continueLabel="Next →"
         onCancel={onClose}
-        onContinue={(item) => setPhase({ name: 'reflect', item })}
+        onContinue={(item, goal) => setPhase({ name: 'reflect', item, goal })}
       />
     )
   }
 
-  const reminder = (item: Manifestation | null) =>
-    item && (
-      <>
-        <ProblemNote item={item} />
-        {(item.kind === 'positive' || item.corrected) && (
-          <div className={`mantra${item.kind === 'positive' ? ' positive' : ''}`}>
-            <span className="muted small">
-              {KIND_META[item.kind].icon} {item.kind === 'complicated' ? 'Repeat to yourself' : item.title}
-            </span>
-            <p>{item.kind === 'complicated' ? item.corrected : item.description || item.title}</p>
-          </div>
-        )}
-      </>
-    )
+  const reminder = ({ item, goal }: Held) => (
+    <>
+      {item && <ProblemNote item={item} />}
+      {item?.corrected && (
+        <div className="mantra">
+          <span className="muted small">{KIND_META.complicated.icon} Repeat to yourself</span>
+          <p>{item.corrected}</p>
+        </div>
+      )}
+      {goal && (
+        <div className="mantra goal">
+          <span className="muted small">{KIND_META.goal.icon} Toward</span>
+          <p>{goal.title}</p>
+        </div>
+      )}
+    </>
+  )
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -118,7 +123,7 @@ export function StruggleMode({ onClose }: { onClose: () => void }) {
         {phase.name === 'reflect' && (
           <>
             <h2>Take a breath.</h2>
-            {reminder(phase.item)}
+            {reminder(phase)}
             <p className="muted">
               {current ? (
                 <>
@@ -134,7 +139,7 @@ export function StruggleMode({ onClose }: { onClose: () => void }) {
                 Stay with it
               </button>
               <span className="spacer" />
-              <button className="btn primary" onClick={() => setPhase({ name: 'switch', item: phase.item })}>
+              <button className="btn primary" onClick={() => setPhase({ ...phase, name: 'switch' })}>
                 Switch to another task
               </button>
             </div>
@@ -144,7 +149,7 @@ export function StruggleMode({ onClose }: { onClose: () => void }) {
         {phase.name === 'switch' && (
           <>
             <h2>What else fits {current ? `${fmtTime(current.chapter.start)}–${fmtTime(current.chapter.end)}` : 'right now'}?</h2>
-            {reminder(phase.item)}
+            {reminder(phase)}
             {plan === undefined && <p className="muted">Loading your day…</p>}
             {plan === null && (
               <div className="empty">
@@ -198,7 +203,7 @@ export function StruggleMode({ onClose }: { onClose: () => void }) {
               </>
             )}
             <div className="modal-actions">
-              <button className="btn ghost" onClick={() => setPhase({ name: 'reflect', item: phase.item })}>
+              <button className="btn ghost" onClick={() => setPhase({ ...phase, name: 'reflect' })}>
                 ‹ Back
               </button>
               <span className="spacer" />

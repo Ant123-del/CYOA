@@ -1,9 +1,13 @@
-"""Hope: logs of complicated and positive manifestations.
+"""Hope: complicated manifestations and ultimate goals.
 
-Writing a thought down is the acceptance step. A complicated one is split into the
-unbiased problem (the stressor itself) and the natural manifestations that come with
-it, and can carry a "corrected manifestation" - words to repeat to yourself. The only
-AI here is the suggestion endpoint, which offers 5 corrected versions.
+The chain: pacing -> patience -> letting go / really believing -> acceptance /
+manifestation -> hope. Writing a complicated thought down is the acceptance step. It is
+split into the unbiased problem (the stressor itself) and the natural manifestations that
+come with it, carries a "corrected manifestation" (words to repeat to yourself), and
+links to the ultimate goal it leads toward. An ultimate goal (a life goal, e.g. becoming
+a psychiatrist) keeps a list of evidence: progress already made, or what makes them
+grateful for where they are. The only AI here is the suggestion endpoint, which offers 5
+corrected versions.
 """
 
 import json
@@ -31,11 +35,13 @@ def _col(uid: str):
 
 
 def _normalize(data: dict, item_id: str) -> dict:
-    """Read older entries: "negative" became "complicated", and its single description
-    is carried over as the problem."""
+    """Read older entries: "negative" became "complicated" (its single description is
+    carried over as the problem), and "positive" became an ultimate "goal"."""
     m = {**data, "id": item_id}
     if m.get("kind") == "negative":
         m["kind"] = "complicated"
+    if m.get("kind") == "positive":
+        m["kind"] = "goal"
     if m.get("kind") == "complicated" and not m.get("problem") and m.get("description"):
         m["problem"] = m["description"]
         m["description"] = ""
@@ -52,10 +58,10 @@ def list_manifestations(user: CurrentUser = Depends(current_user)):
 def create_manifestation(body: ManifestationIn, user: CurrentUser = Depends(current_user)):
     ts = now_iso()
     data = {**body.model_dump(), "createdAt": ts, "updatedAt": ts}
-    if body.kind == "positive":
-        data.update(problem="", naturalManifestations=[], corrected="")
+    if body.kind == "goal":
+        data.update(problem="", naturalManifestations=[], corrected="", goalId="")
     else:
-        data["description"] = ""
+        data.update(description="", evidence=[])
     ref = _col(user.uid).document()
     ref.set(data)
     return {**data, "id": ref.id}
@@ -72,6 +78,8 @@ def update_manifestation(item_id: str, patch: ManifestationPatch, user: CurrentU
         changes["kind"] = "complicated"  # migrate older entries on save
         if "problem" in changes:
             changes["description"] = ""  # the old description now lives in problem
+    elif stored.get("kind") == "positive":
+        changes["kind"] = "goal"
     ref.update({**changes, "updatedAt": now_iso()})
     return _normalize(ref.get().to_dict(), item_id)
 
@@ -85,7 +93,9 @@ def delete_manifestation(item_id: str, user: CurrentUser = Depends(current_user)
 # ---------- the one bit of AI ----------
 
 SUGGEST_SYSTEM = """You help someone answer a complicated thought they have written down in a
-personal journal. CYOA follows a simple blueprint: ACCEPT, then MANIFEST.
+personal journal. CYOA follows a simple blueprint: ACCEPT, then MANIFEST. Statements
+only work when they can be believed, so write things they could truly believe today,
+not grand promises.
 
 They give you:
 - problem: the stressor itself, written as unbiased as they could. This is the ground truth.

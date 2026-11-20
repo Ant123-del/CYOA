@@ -277,7 +277,8 @@ class MemoryNoteIn(BaseModel):
 
 # ---------- Hope: manifestations ----------
 
-ManifestationKind = Literal["complicated", "positive"]
+# "goal" = an ultimate goal in life (older entries were "positive" manifestations).
+ManifestationKind = Literal["complicated", "goal"]
 
 NaturalList = list[Annotated[str, Field(min_length=1, max_length=300)]]
 
@@ -285,19 +286,24 @@ NaturalList = list[Annotated[str, Field(min_length=1, max_length=300)]]
 class ManifestationIn(BaseModel):
     kind: ManifestationKind
     title: str = Field(min_length=1, max_length=120)
-    description: str = Field(default="", max_length=4000)  # positive only
+    description: str = Field(default="", max_length=4000)  # goal only
+    # goal only: progress already made, or what makes them grateful for where they are
+    evidence: NaturalList = Field(default_factory=list, max_length=30)
     # complicated only:
     problem: str = Field(default="", max_length=2000)  # the stressor, as unbiased as possible
     naturalManifestations: NaturalList = Field(default_factory=list, max_length=30)  # what comes with it
     corrected: str = Field(default="", max_length=600)  # the words to repeat to yourself
+    goalId: str = Field(default="", max_length=64)  # the ultimate goal it leads toward
 
 
 class ManifestationPatch(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=120)
     description: str | None = Field(default=None, max_length=4000)
+    evidence: NaturalList | None = Field(default=None, max_length=30)
     problem: str | None = Field(default=None, max_length=2000)
     naturalManifestations: NaturalList | None = Field(default=None, max_length=30)
     corrected: str | None = Field(default=None, max_length=600)
+    goalId: str | None = Field(default=None, max_length=64)
 
 
 class Manifestation(ManifestationIn):

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
-import { KIND_META, ManifestationForm, blankManifestation } from '../components/Manifestations'
+import { HopeChain, KIND_META, ManifestationForm, blankManifestation } from '../components/Manifestations'
 import { StruggleMode } from '../components/Struggle'
 import type { Manifestation, ManifestationInput, ManifestationKind } from '../types'
 
@@ -29,13 +29,16 @@ export default function Hope() {
     setEditing(null)
   }
 
+  const goals = items.filter((m) => m.kind === 'goal')
+  const goalTitle = (id: string) => goals.find((g) => g.id === id)?.title
+
   const section = (kind: ManifestationKind) => {
     const list = items.filter((m) => m.kind === kind)
     return (
       <section className={`hope-col ${kind}`}>
         <div className="hope-col-head">
           <h2>
-            <span aria-hidden>{KIND_META[kind].icon}</span> {KIND_META[kind].label} manifestations
+            <span aria-hidden>{KIND_META[kind].icon}</span> {kind === 'goal' ? 'Ultimate goals' : 'Complicated manifestations'}
           </h2>
           <button className="btn ghost small" onClick={() => setEditing({ id: null, data: blankManifestation(kind) })}>
             New +
@@ -55,15 +58,22 @@ export default function Hope() {
                       kind: m.kind,
                       title: m.title,
                       description: m.description,
+                      evidence: m.evidence,
                       problem: m.problem,
                       naturalManifestations: m.naturalManifestations,
                       corrected: m.corrected,
+                      goalId: m.goalId,
                     },
                   })
                 }
               >
                 <span className="hope-title">{m.title}</span>
-                {kind === 'positive' && m.description && <span className="hope-desc">{m.description}</span>}
+                {kind === 'goal' && m.description && <span className="hope-desc">{m.description}</span>}
+                {kind === 'goal' && m.evidence.length > 0 && (
+                  <span className="muted small">
+                    {m.evidence.length} {m.evidence.length === 1 ? 'piece' : 'pieces'} of progress & gratitude
+                  </span>
+                )}
                 {kind === 'complicated' && m.problem && <span className="hope-desc">{m.problem}</span>}
                 {kind === 'complicated' && m.naturalManifestations.length > 0 && (
                   <span className="muted small">
@@ -79,6 +89,11 @@ export default function Hope() {
                   ) : (
                     <span className="muted small">No corrected manifestation yet</span>
                   ))}
+                {kind === 'complicated' && goalTitle(m.goalId) && (
+                  <span className="hope-leads muted small">
+                    {KIND_META.goal.icon} Leads toward {goalTitle(m.goalId)}
+                  </span>
+                )}
               </button>
             </li>
           ))}
@@ -92,7 +107,10 @@ export default function Hope() {
       <div className="page-head">
         <div>
           <h1>Hope</h1>
-          <p className="muted">Accept what's in your head, then answer it. Before each choice on Today, you'll check in with these.</p>
+          <p className="muted">
+            Accept what's in your head, answer it, then take one tiny step toward the life you're building. Before each choice on Today,
+            you'll check in with these.
+          </p>
         </div>
       </div>
       {error && (
@@ -100,6 +118,7 @@ export default function Hope() {
           {error}
         </div>
       )}
+      <HopeChain />
       <div className="struggle-card">
         <div>
           <h2>Struggle mode</h2>
@@ -112,7 +131,7 @@ export default function Hope() {
       {loading && <p className="muted">Loading…</p>}
       <div className="hope-grid">
         {section('complicated')}
-        {section('positive')}
+        {section('goal')}
       </div>
 
       {struggling && (
@@ -128,11 +147,12 @@ export default function Hope() {
         <div className="modal-backdrop" onClick={() => setEditing(null)}>
           <div className="modal hope-modal" onClick={(e) => e.stopPropagation()}>
             <h2>
-              {editing.id ? 'Edit' : 'New'} {KIND_META[editing.data.kind].label.toLowerCase()} manifestation
+              {editing.id ? 'Edit' : 'New'} {editing.data.kind === 'goal' ? 'ultimate goal' : 'complicated manifestation'}
             </h2>
             <ManifestationForm
               id={editing.id}
               initial={editing.data}
+              goals={goals.filter((g) => g.id !== editing.id)}
               onSaved={onSaved}
               onCancel={() => setEditing(null)}
               onDeleted={onDeleted}

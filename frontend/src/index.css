@@ -2358,8 +2358,11 @@ button.tmap-opt:hover:not(:disabled) {
   gap: 8px;
   box-shadow: var(--shadow);
 }
-.hope-col.positive {
+.hope-col.goal {
   --c: var(--medium);
+}
+.hope-leads {
+  font-style: italic;
 }
 .hope-col-head {
   display: flex;
@@ -2458,6 +2461,9 @@ button.tmap-opt:hover:not(:disabled) {
   border-radius: 8px;
   padding: 6px 6px 6px 10px;
   font-size: 0.92rem;
+}
+.natural-list.goal li {
+  border-left-color: var(--medium);
 }
 .natural-list li span {
   flex: 1;
@@ -2582,7 +2588,7 @@ button.tmap-opt:hover:not(:disabled) {
   flex-direction: column;
   gap: 6px;
 }
-.mantra.positive {
+.mantra.goal {
   background: color-mix(in srgb, var(--medium) 14%, var(--surface));
 }
 .mantra p {
@@ -2671,4 +2677,318 @@ button.tmap-opt:hover:not(:disabled) {
 .problem-note p {
   margin: 0;
   white-space: pre-wrap;
+}
+
+/* ---------- hope: the chain ---------- */
+.hope-chain {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 20px;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.chain-fork {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 2.2;
+  min-width: 0;
+}
+.chain-branch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chain-node {
+  --c: var(--accent);
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-top: 3px solid color-mix(in srgb, var(--c) 55%, var(--border));
+}
+.chain-node.pacing,
+.chain-node.patience {
+  --c: var(--yes);
+}
+.chain-node.letting-go,
+.chain-node.acceptance {
+  --c: var(--low);
+}
+.chain-node.believing,
+.chain-node.manifestation {
+  --c: var(--accent);
+}
+.chain-node.hope {
+  --c: var(--medium);
+  background: color-mix(in srgb, var(--medium) 12%, var(--surface));
+}
+.chain-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.chain-hint {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+.chain-node.hope .chain-label {
+  font-family: var(--display);
+  font-size: 1.05rem;
+}
+.chain-arrow {
+  flex-shrink: 0;
+  width: 14px;
+  height: 2px;
+  background: var(--border);
+  position: relative;
+}
+.chain-arrow::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  top: -4px;
+  border: 5px solid transparent;
+  border-left: 6px solid var(--border);
+  border-right: 0;
+}
+.hope-chain > .chain-node {
+  flex: 1;
+}
+/* compact version inside the check-in: a thin strip, lit rungs filled in */
+.hope-chain.compact {
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  gap: 3px;
+}
+.hope-chain.compact .chain-fork {
+  gap: 3px;
+}
+.hope-chain.compact .chain-branch {
+  gap: 3px;
+}
+.hope-chain.compact .chain-node {
+  padding: 3px 6px;
+  border-radius: 6px;
+  border-top-width: 1px;
+  opacity: 0.55;
+}
+.hope-chain.compact .chain-label {
+  font-size: 0.68rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hope-chain.compact .chain-node.hope .chain-label {
+  font-size: 0.78rem;
+}
+.hope-chain.compact .chain-arrow {
+  width: 6px;
+}
+.hope-chain.compact .chain-arrow::after {
+  border-width: 3px;
+  border-left-width: 4px;
+  top: -2px;
+}
+.chain-node.lit {
+  opacity: 1 !important;
+  background: color-mix(in srgb, var(--c) 18%, var(--surface));
+  border-color: var(--c);
+}
+@media (max-width: 720px) {
+  .hope-chain:not(.compact) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .hope-chain:not(.compact) .chain-fork {
+    flex-direction: row;
+  }
+  .hope-chain:not(.compact) .chain-branch {
+    flex: 1;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .hope-chain:not(.compact) .chain-arrow {
+    align-self: center;
+    width: 2px;
+    height: 12px;
+  }
+  .hope-chain:not(.compact) .chain-arrow::after {
+    right: -4px;
+    top: auto;
+    bottom: -1px;
+    border: 5px solid transparent;
+    border-top: 6px solid var(--border);
+    border-bottom: 0;
+  }
+}
+@media (max-width: 480px) {
+  .hope-chain.compact {
+    display: none;
+  }
+}
+
+/* ---------- hope: ultimate goal + trophy ---------- */
+.goal-note {
+  border-left: 3px solid var(--medium);
+  background: color-mix(in srgb, var(--medium) 10%, var(--surface));
+  border-radius: 0 12px 12px 0;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.goal-note p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.goal-title {
+  font-family: var(--display);
+  font-size: 1.35rem;
+  line-height: 1.3;
+}
+.goal-desc {
+  color: var(--muted);
+}
+.evidence-list {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.evidence-list li {
+  font-size: 0.92rem;
+  padding-left: 22px;
+  position: relative;
+}
+.evidence-list li::before {
+  content: '✓';
+  position: absolute;
+  left: 4px;
+  color: var(--yes);
+  font-weight: 700;
+}
+.trophy-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+.trophy-btn {
+  --p: 0;
+  width: 168px;
+  height: 168px;
+  border-radius: 50%;
+  border: 0;
+  padding: 10px;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  background: conic-gradient(var(--medium) calc(var(--p) * 360deg), var(--surface-2) 0);
+  box-shadow: var(--shadow);
+  display: grid;
+  place-items: center;
+  position: relative;
+  transition: transform 60ms ease;
+}
+.trophy-btn::before {
+  content: '';
+  position: absolute;
+  inset: 10px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.trophy-btn:active {
+  transform: scale(0.95);
+}
+.trophy-btn:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+.trophy-icon {
+  position: relative;
+  font-size: 4.2rem;
+  line-height: 1;
+  animation: trophy-bump 140ms ease-out;
+}
+@keyframes trophy-bump {
+  from {
+    transform: scale(1.18) rotate(-4deg);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+.trophy-count {
+  margin: 0;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.trophy-count strong {
+  font-family: var(--display);
+  font-size: 1.4rem;
+}
+.manifested {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 12px 0;
+}
+.manifested-icon {
+  font-size: 3.5rem;
+  line-height: 1;
+  animation: manifested-in 420ms cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+.manifested h2 {
+  font-size: 2.2rem;
+  background: linear-gradient(90deg, var(--medium), var(--accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.manifested p {
+  margin: 0;
+}
+.manifested .best {
+  color: var(--yes);
+}
+.manifested-goal {
+  font-family: var(--display);
+  font-size: 1.1rem;
+}
+@keyframes manifested-in {
+  from {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trophy-icon,
+  .manifested-icon {
+    animation: none;
+  }
 }
