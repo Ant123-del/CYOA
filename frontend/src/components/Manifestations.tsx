@@ -500,7 +500,7 @@ const STEP_RUNGS: Record<Step['name'], Rung[] | 'all'> = {
 /**
  * Asked before choosing a path: which manifestations are feeding into you right now?
  * A complicated one shows its problem and corrected manifestation, then goes on to its
- * ultimate goal, where you click the trophy (the tiny step) until it's "Manifested".
+ * ultimate goal, where you click the trophy (the tiny step) until it says "Patience".
  */
 export function HopeCheckIn({
   taskTitle,
@@ -719,7 +719,7 @@ export function HopeCheckIn({
               <span className="manifested-icon" aria-hidden>
                 🏆
               </span>
-              <h2>Manifested</h2>
+              <h2>Patience</h2>
               <p className="muted">
                 {step.stats.clicks} clicks in {step.stats.seconds.toFixed(1)}s · {step.stats.cps.toFixed(1)} per second
                 {step.stats.best && <strong className="best"> · New best!</strong>}
