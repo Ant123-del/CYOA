@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useSleep } from '../lib/sleep'
+import { usePatience } from '../lib/patience'
 import { browserTimezone } from '../lib/dates'
 import type { AIMemory, CalendarInfo, UserSettings } from '../types'
 
@@ -16,6 +17,7 @@ const TIMEZONES: string[] = (() => {
 export default function Settings() {
   const { settings, setSettings, refreshSettings, logOut } = useAuth()
   const { refresh: refreshSleep } = useSleep()
+  const { refresh: refreshPatience } = usePatience()
   const [msg, setMsg] = useState<{ kind: 'info' | 'error'; text: string } | null>(null)
 
   if (!settings) return <p className="muted page">Loading settings…</p>
@@ -98,6 +100,7 @@ export default function Settings() {
             onChange={async (e) => {
               await patch({ sleepTargetHours: Number(e.target.value) })
               refreshSleep()
+              refreshPatience() // hours short of the goal cost patience
             }}
           >
             {[6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10].map((h) => (
@@ -107,6 +110,31 @@ export default function Settings() {
             ))}
           </select>
         </label>
+      </section>
+
+      <section className="panel">
+        <h2>⏳ Patience</h2>
+        <p className="muted">
+          Each hour of sleep gives you 5 patience, and each hour short of your sleep goal costs 10. While your balance is below zero, the debt
+          grows by this much every hour (compounding) until you pay it back.
+        </p>
+        <label>
+          Interest on debt
+          <select
+            value={settings.patienceInterestPerHour}
+            onChange={async (e) => {
+              await patch({ patienceInterestPerHour: Number(e.target.value) })
+              refreshPatience()
+            }}
+          >
+            {[0, 0.5, 1, 2, 3, 5, 10].map((r) => (
+              <option key={r} value={r}>
+                {r === 0 ? 'No interest' : `${r}% an hour`}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="muted small">Set each tag's default patience from the Board (⏳ Patience by tag).</p>
       </section>
 
       <section className="panel">

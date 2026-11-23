@@ -3,7 +3,7 @@ from datetime import date as date_cls
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from .. import ai, memory, plan_jobs, revise
+from .. import ai, memory, patience, plan_jobs, revise
 from ..auth import CurrentUser, current_user, get_user_settings
 from ..models import AIMemory, ChapterOptionsIn, DayPlan, MemoryNoteIn, PlanDayIn, ReviseIn
 from .days import load_day, save_day
@@ -66,6 +66,7 @@ def revise_day(body: ReviseIn, user: CurrentUser = Depends(current_user)):
     except ai.AIError as exc:
         raise HTTPException(502, str(exc)) from exc
     saved = save_day(user.uid, plan, settings)
+    patience.charge_revision(user.uid, settings)  # each revision costs a point
     memory.record(
         user.uid,
         kind="revise",

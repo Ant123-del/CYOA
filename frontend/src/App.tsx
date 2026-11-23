@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from './lib/auth'
 import Layout from './components/Layout'
 import { SleepProvider } from './lib/sleep'
+import { PatienceProvider } from './lib/patience'
 import Login from './pages/Login'
 import Board from './pages/Board'
 import Plan from './pages/Plan'
@@ -22,18 +23,20 @@ export default function App() {
   if (!user) return <Login />
 
   return (
-    <SleepProvider>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route path="/" element={<Navigate to="/today" replace />} />
-          <Route path="/today" element={<Today />} />
-          <Route path="/plan" element={<Plan />} />
-          <Route path="/board" element={<Board />} />
-          <Route path="/hope" element={<Hope />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="*" element={<Navigate to="/today" replace />} />
-        </Route>
-      </Routes>
-    </SleepProvider>
+    <PatienceProvider>
+      <SleepProvider>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route path="/" element={<Navigate to="/today" replace />} />
+            <Route path="/today" element={<Today />} />
+            <Route path="/plan" element={<Plan />} />
+            <Route path="/board" element={<Board />} />
+            <Route path="/hope" element={<Hope />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="*" element={<Navigate to="/today" replace />} />
+          </Route>
+        </Routes>
+      </SleepProvider>
+    </PatienceProvider>
   )
 }

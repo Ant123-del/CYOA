@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..auth import CurrentUser, current_user, get_user_settings
 from ..models import SleepAt, SleepLogIn, SleepSession, SleepSummary, UserSettings
+from ..patience import sync_sleep
 from ..sleep import MAX_SESSION_HOURS, parse_iso, recent_sessions, sleep_col, sleep_summary, to_iso
 from ..timeutil import new_id, tz
 from .days import load_day
@@ -83,6 +84,7 @@ def wake(body: SleepAt, user: CurrentUser = Depends(current_user)):
     if end - start > timedelta(hours=MAX_SESSION_HOURS):
         raise HTTPException(400, f"That's over {MAX_SESSION_HOURS} hours of sleep - pick a later wake-up time, or cancel and log it manually.")
     sleep_col(user.uid).document(s.id).update({"end": to_iso(end)})
+    sync_sleep(user.uid, settings)
     return summary_for(user.uid, settings)
 
 
@@ -103,6 +105,7 @@ def log_sleep(body: SleepLogIn, user: CurrentUser = Depends(current_user)):
     sleep_col(user.uid).document(sid).set(
         SleepSession(id=sid, start=to_iso(start), end=to_iso(end), source="manual").model_dump()
     )
+    sync_sleep(user.uid, settings)
     return summary_for(user.uid, settings)
 
 
@@ -110,4 +113,5 @@ def log_sleep(body: SleepLogIn, user: CurrentUser = Depends(current_user)):
 def delete_sleep(session_id: str, user: CurrentUser = Depends(current_user)):
     settings = get_user_settings(user)
     sleep_col(user.uid).document(session_id).delete()
+    sync_sleep(user.uid, settings)
     return summary_for(user.uid, settings)

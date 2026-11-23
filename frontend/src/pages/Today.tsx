@@ -10,7 +10,8 @@ import { currentTimeline, hasTimelines, pathChapters, timelineById } from '../li
 import StorylineLanes from '../components/StorylineLanes'
 import ViewToggle, { useDayView } from '../components/ViewToggle'
 import { SleepCard } from '../components/Sleep'
-import { HopeCheckIn } from '../components/Manifestations'
+import { PatienceCheckIn } from '../components/Patience'
+import { usePatience } from '../lib/patience'
 import type { Chapter, DayPlan } from '../types'
 
 const CAL_MSG: Record<string, string> = {
@@ -34,10 +35,9 @@ export default function Today() {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [view, setView] = useDayView()
   const [showRevise, setShowRevise] = useState(false)
-  // A task waiting on the Hope check-in ("what manifestations are feeding into you?").
-  // optionId is set when they went straight for a path (e.g. in the storylines view).
-  const [pending, setPending] = useState<{ chapter: Chapter; optionId: string | null } | null>(null)
-  const [checkedIn, setCheckedIn] = useState<Set<string>>(() => new Set())
+  // A path waiting on its patience check-in: before you start it, or after it's done.
+  const [pending, setPending] = useState<{ chapter: Chapter; optionId: string; phase: 'before' | 'after' } | null>(null)
+  const { patience, set: setPatience, refresh: refreshPatience } = usePatience()
   const toggleRevise = () => {
     const open = !showRevise
     setShowRevise(open)
@@ -77,7 +77,7 @@ export default function Today() {
     return chapters.find((c) => c.start >= now && !c.chosenOptionId)?.id ?? null
   }, [plan, chapters, now, isToday, focusId])
 
-  const commitChoice = async (c: Chapter, optionId: string) => {
+  const commitChoice = async (c: Chapter, optionId: string): Promise<boolean> => {
     setBusy(optionId)
     try {
       const before = plan?.currentTimelineId
@@ -88,8 +88,10 @@ export default function Today() {
       const msg = CAL_MSG[res.calendar] ?? `Chosen. (Calendar: ${res.calendar})`
       setToast(moved ? `${msg} Your day now follows “${moved.name}”.` : msg)
       if (focusId) setParams({ date })
+      return true
     } catch (e) {
       setError((e as Error).message)
+      return false
     } finally {
       setBusy(null)
     }
@@ -99,21 +101,32 @@ export default function Today() {
   // A chapter is missed if they said so, or (by default) if its time passed without a choice.
   const isMissed = (c: Chapter) =>
     !c.chosenOptionId && (Boolean(c.missed) || (settings?.assumeMissed !== false && (isPastDay || (isToday && c.end <= now))))
-  // Check in with your manifestations when you open a task. Chosen and missed chapters
-  // skip it - looking back or logging after the fact isn't starting something.
-  const needsCheckIn = (c: Chapter) => !c.chosenOptionId && !isMissed(c) && !checkedIn.has(c.id)
+  const toggleChapter = (c: Chapter) => setExpanded(expanded === c.id ? null : c.id)
 
-  const toggleChapter = (c: Chapter) => {
-    if (expanded === c.id) return setExpanded(null)
-    if (needsCheckIn(c)) return setPending({ chapter: c, optionId: null })
-    setExpanded(c.id)
+  // Every path gets a patience check-in. Starting one asks what it will cost or give
+  // you; picking one after its time (or after missing it) asks what it did.
+  const isOver = (c: Chapter) => isPastDay || (isToday && c.end <= now)
+  const choose = (c: Chapter, optionId: string) =>
+    setPending({ chapter: c, optionId, phase: isMissed(c) || isOver(c) ? 'after' : 'before' })
+
+  const taskEntry = (c: Chapter) => patience?.entries.find((e) => e.id === `task_${date}_${c.id}`)
+  // Started (or finished) tasks you haven't said how they went yet.
+  const canSettle = (c: Chapter) => {
+    if (!c.chosenOptionId || !patience || (!isPastDay && !(isToday && c.start <= now))) return false
+    const e = taskEntry(c)
+    return e ? !e.settled : Boolean(c.chosenAt && c.chosenAt >= patience.startedAt)
   }
+  const toSettle = chapters.filter((c) => canSettle(c) && isOver(c))
+  const settle = (c: Chapter) => c.chosenOptionId && setPending({ chapter: c, optionId: c.chosenOptionId, phase: 'after' })
 
-  // Paths can also be picked without opening the task first (storylines view, the
-  // auto-opened current chapter) - check in then instead.
-  const choose = (c: Chapter, optionId: string) => {
-    if (!needsCheckIn(c)) return commitChoice(c, optionId)
-    setPending({ chapter: c, optionId })
+  const checkIn = async (amount: number, minutes: number | null) => {
+    if (!pending) return
+    const { chapter, optionId, phase } = pending
+    const alreadyChosen = chapter.chosenOptionId === optionId
+    if (!alreadyChosen && !(await commitChoice(chapter, optionId))) return setPending(null)
+    setPatience(await api.patienceTask({ date, chapterId: chapter.id, optionId, phase, amount, minutes }))
+    setPending(null)
+    if (alreadyChosen) setToast(`Checked in: ${amount >= 0 ? 'gave you' : 'cost you'} ${Math.abs(amount)} patience.`)
   }
 
   const setMissed = async (c: Chapter, missed: boolean) => {
@@ -133,8 +146,9 @@ export default function Today() {
     setBusy(c.id)
     try {
       setPlan(await api.resetChoice(date, c.id))
+      refreshPatience() // its patience is refunded
       setExpanded(c.id)
-      setToast('Path cleared. Pick a new one.')
+      setToast('Path cleared, and its patience refunded. Pick a new one.')
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -192,6 +206,18 @@ export default function Today() {
       )}
 
       {isToday && <SleepCard />}
+
+      {toSettle.length > 0 && (
+        <div className="banner info settle-banner">
+          <span>
+            {toSettle.length === 1 ? `“${toSettle[0].title}” is done.` : `${toSettle.length} tasks are done.`} How much patience did{' '}
+            {toSettle.length === 1 ? 'it' : 'they'} cost or give you?
+          </span>
+          <button className="btn small primary" onClick={() => settle(toSettle[0])}>
+            Check in
+          </button>
+        </div>
+      )}
 
       {plan === undefined && <p className="muted">Loading your story…</p>}
 
@@ -294,6 +320,15 @@ export default function Today() {
                         <KindBadge option={chosen} storylines={plan.storylines} />
                         <span className="chosen-title">{chosen.title}</span>
                         <SwitchTag option={chosen} timelines={plan.timelines} />
+                        {canSettle(c) && (
+                          <button className="btn small settle-btn" onClick={() => settle(c)}>
+                            ⏳ How did it go?
+                          </button>
+                        )}
+                        {(() => {
+                          const e = taskEntry(c)
+                          return e ? <span className={`ledger-amount ${e.kind}`}>{e.settled ? '' : '~'}{e.amount >= 0 ? '+' : ''}{e.amount}</span> : null
+                        })()}
                         <button className="btn ghost small" onClick={() => reset(c)} disabled={busy === c.id}>
                           Change course
                         </button>
@@ -378,19 +413,21 @@ export default function Today() {
         </>
       )}
 
-      {pending && (
-        <HopeCheckIn
-          taskTitle={pending.chapter.options.find((o) => o.id === pending.optionId)?.title ?? pending.chapter.title}
-          onCancel={() => setPending(null)}
-          onContinue={() => {
-            const p = pending
-            setPending(null)
-            setCheckedIn((s) => new Set(s).add(p.chapter.id))
-            if (p.optionId) commitChoice(p.chapter, p.optionId)
-            else setExpanded(p.chapter.id)
-          }}
-        />
-      )}
+      {pending && (() => {
+        const option = pending.chapter.options.find((o) => o.id === pending.optionId)
+        return option ? (
+          <PatienceCheckIn
+            key={`${pending.chapter.id}-${pending.optionId}-${pending.phase}`}
+            phase={pending.phase}
+            date={date}
+            chapter={pending.chapter}
+            option={option}
+            expected={taskEntry(pending.chapter)?.expected}
+            onCancel={() => setPending(null)}
+            onConfirm={checkIn}
+          />
+        ) : null
+      })()}
 
       {toast && <div className="toast">{toast}</div>}
     </div>

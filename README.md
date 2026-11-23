@@ -18,9 +18,17 @@ It keeps two lists: **complicated manifestations** and **ultimate goals**.
 - A **complicated** one has a title, **the unbiased problem** (the stressor, put as fairly as you can), a list of **natural manifestations** (the thoughts that come along with it, added one at a time), a **corrected manifestation** (the words you repeat to yourself) and the **ultimate goal it leads toward**. Writing it down is the acceptance step. **✨ Suggest** offers 5 corrected manifestations (or none of them). Each one first accepts the problem as it is, then turns toward it, in words you could believe today; the natural manifestations set the tone, but the suggestions don't argue with or repeat them. That is the only AI in Hope, and nothing here is shared with the day planner.
 - An **ultimate goal** is a big, life-level goal (becoming a psychiatrist, living in Rome). It has a title, a description, and a list of **progress & gratitude**: evidence you're already on your way, or what makes you grateful for where you are. Older "positive" manifestations show up here.
 
-**The check-in:** when you open a task on Today, CYOA asks which manifestations are feeding into you. Pick a complicated one and you see the original problem and its corrected manifestation, then go on to its ultimate goal (you choose the goal the first time, and it's remembered). With the goal on screen, you click the 🏆 trophy a random 20–80 times, as fast as you can. That's the tiny step that brings patience. Then it says **Patience**, with your clicks per second (your best is remembered in this browser). You can also go straight to an ultimate goal.
+**Struggle mode** (on the Hope tab) is for the middle of a task. CYOA asks which manifestations are feeding into you. Pick a complicated one and you see the original problem and its corrected manifestation, then go on to its ultimate goal (you choose the goal the first time, and it's remembered). With the goal on screen, you click the 🏆 trophy a random 20–80 times, as fast as you can. That's the tiny step that brings patience. Then it says **Patience**, with your clicks per second (your best is remembered in this browser). You can also go straight to an ultimate goal. Then you either stay with the task or switch. Switching lists every option, across all storylines and all timelines, for the time range you're in (your current task's start to end), and picking one schedules it from now.
 
-**Struggle mode** (on the Hope tab) is for the middle of a task. You check in the same way, then either stay with the task or switch. Switching lists every option, across all storylines and all timelines, for the time range you're in (your current task's start to end), and picking one schedules it from now.
+**Patience: the currency of hope.** Hope is what you invest your patience in, and patience is what you pay with. CYOA keeps a patience balance (⏳ in the top bar, the full ledger on the Hope tab). It only counts what actually happens in the app. You start with **25**.
+
+- **Emission** (gaining patience) comes from fulfilling wants and needs: **+5 an hour of sleep**, **+2 for eating**, **+1 for a break**, and anything you tag as a want or need.
+- **Absorption** (losing patience) comes from what you push through: routines, school, work, anything on your to-do list, **−10 for every hour short of your sleep goal** (per night), **−1 each time you check the app** (once per 15 minutes, so refreshing doesn't count twice), and **−1 for each revision** with ✏️ Revise with AI.
+- **The parabola effect:** a want or need climbs to its peak at its climax (eating: +2 at 30 min), falls back to 0 after a stretch, and past that it costs you, because you got accustomed to the luxury. Eating has a wide stretch; addictive things should get a tight one.
+- **Check-ins:** every path on Today asks *before* you start how much patience it will cost or give you, and *after* it's done how much it actually did (the **⏳ How did it go?** button and banner). The default is the average of your past scores for that activity; failing that, the Board tag's default (wants and needs follow the parabola for the time you spent), then the average of all your scores. Picking a path after its time asks the "after" question straight away. **Change course** refunds it.
+- **Debt:** you can go below zero, and CYOA warns you before you take something on that would put you there. Debt compounds at **1% an hour** (change it in Settings) until you pay it back with emission.
+- **Board → ⏳ Patience by tag** sets each tag's default: a fixed cost/gain, or a want/need with its peak, climax and stretch.
+- On the Hope tab you can also log things that weren't on the plan (a snack, a walk, an hour of TV).
 
 ```
 CYOA/
@@ -79,7 +87,7 @@ Gmail allows roughly 500 recipients a day. For more, switch the `SMTP_*` values 
 ```bash
 # Terminal 1 — backend
 cd backend
-source venv/bin/activate           # first time: python3 -m venv venv && pip install -r requirements.txt
+source venv/bin/activate           # Windows: .\venv\Scripts\Activate.ps1   first time: python -m venv venv && pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -149,5 +157,7 @@ users/{uid}                       settings (timezone, reminder prefs, calendarId
 users/{uid}/private/calendar      linked Calendar ID (server-only, ownership-verified)
 users/{uid}/goals/{goalId}        board cards
 users/{uid}/days/{YYYY-MM-DD}     day plan: storylines + chapters + options + choices
+users/{uid}/private/patience      patience balance, start, interest clock, last app check
+users/{uid}/patience/{entryId}    patience ledger (emission +, absorption -)
 reminders/{uid_date_chapter}      pending reminder emails (sendAt in UTC)
 ```

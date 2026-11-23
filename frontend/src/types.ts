@@ -117,6 +117,8 @@ export interface UserSettings {
   mealNotes: string
   assumeMissed: boolean
   sleepTargetHours: number
+  patienceInterestPerHour: number // % an hour, compounding, while the balance is negative
+  patienceTags: Record<string, TagPatience> // default patience per board tag
 }
 
 export type SleepStatus = 'unknown' | 'rested' | 'low' | 'deprived'
@@ -239,3 +241,60 @@ export type ManifestationInput = Pick<
   Manifestation,
   'kind' | 'title' | 'description' | 'evidence' | 'problem' | 'naturalManifestations' | 'corrected' | 'goalId'
 >
+
+// ---------- Patience: the currency of hope ----------
+
+/** emission = gaining patience, absorption = losing it */
+export type PatienceKind = 'emission' | 'absorption'
+export type PatienceSource = 'start' | 'open' | 'revise' | 'sleep' | 'task' | 'log' | 'interest'
+
+/**
+ * A tag's default patience. fixed: always `points`. parabola: a want or need that climbs
+ * to `points` at `idealMinutes`, falls back to 0 after another `widthMinutes`, and keeps
+ * falling past that (accustomed to the luxury).
+ */
+export interface TagPatience {
+  mode: 'fixed' | 'parabola'
+  points: number
+  idealMinutes: number
+  widthMinutes: number
+}
+
+export interface PatienceEntry {
+  id: string
+  at: string
+  date: string
+  amount: number
+  kind: PatienceKind
+  source: PatienceSource
+  label: string
+  tags: string[]
+  activityKey: string | null
+  chapterId: string | null
+  optionId: string | null
+  minutes: number | null
+  expected: number | null
+  actual: number | null
+  settled: boolean
+  count: number | null
+}
+
+export interface PatienceSummary {
+  balance: number
+  startedAt: string
+  interestPerHour: number
+  emittedToday: number
+  absorbedToday: number
+  unsettled: number
+  entries: PatienceEntry[]
+}
+
+export interface PatienceSuggestion {
+  amount: number
+  basis: 'history' | 'tag' | 'need' | 'average' | 'fallback'
+  samples: number
+  profile: TagPatience | null
+  minutes: number | null
+  label: string
+  tags: string[]
+}

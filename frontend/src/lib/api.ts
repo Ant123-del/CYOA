@@ -11,7 +11,10 @@ import type {
   GoalInput,
   Manifestation,
   ManifestationInput,
+  PatienceSuggestion,
+  PatienceSummary,
   PlanJob,
+  TagPatience,
   SleepSummary,
   UserSettings,
 } from '../types'
@@ -119,6 +122,20 @@ export const api = {
   deleteManifestation: (id: string) => request<{ ok: boolean }>('DELETE', `/api/manifestations/${id}`),
   suggestCorrected: (title: string, problem: string, naturalManifestations: string[]) =>
     request<{ suggestions: string[] }>('POST', '/api/manifestations/suggest', { title, problem, naturalManifestations }),
+
+  patience: () => request<PatienceSummary>('GET', '/api/patience'),
+  patienceOpen: () => request<PatienceSummary>('POST', '/api/patience/open'),
+  patienceSuggest: (date: string, chapterId: string, optionId: string, minutes?: number | null) =>
+    request<PatienceSuggestion>(
+      'GET',
+      `/api/patience/suggest?date=${date}&chapterId=${chapterId}&optionId=${optionId}${minutes != null ? `&minutes=${minutes}` : ''}`,
+    ),
+  patienceTask: (body: { date: string; chapterId: string; optionId: string; phase: 'before' | 'after'; amount: number; minutes?: number | null }) =>
+    request<PatienceSummary>('POST', '/api/patience/tasks', body),
+  patienceLog: (body: { label: string; amount: number; tags?: string[]; minutes?: number | null }) =>
+    request<PatienceSummary>('POST', '/api/patience/log', body),
+  patienceDelete: (id: string) => request<PatienceSummary>('DELETE', `/api/patience/entries/${id}`),
+  setPatienceTags: (tags: Record<string, TagPatience>) => request<Record<string, TagPatience>>('PUT', '/api/patience/tags', tags),
 
   events: (date: string) => request<CalendarEvent[]>('GET', `/api/calendar/events?date=${date}`),
 }

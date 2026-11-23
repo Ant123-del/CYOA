@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { SleepControl } from './Sleep'
+import { PatiencePill } from './Patience'
 
 const links = [
   { to: '/today', label: 'Today', icon: '🧭' },
@@ -41,6 +42,7 @@ export default function Layout() {
               {settings.googleConnected ? 'Make a calendar editable' : 'Link calendar'}
             </NavLink>
           )}
+          <PatiencePill />
           <SleepControl />
           {user?.photoURL ? (
             <img className="avatar" src={user.photoURL} alt="" referrerPolicy="no-referrer" />

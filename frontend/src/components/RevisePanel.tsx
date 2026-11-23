@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../lib/api'
+import { usePatience } from '../lib/patience'
 import type { DayPlan } from '../types'
 import { timelineLabel } from './Adventure'
 
@@ -21,6 +22,7 @@ export default function RevisePanel({ plan, onPlan }: { plan: DayPlan; onPlan: (
   const [busy, setBusy] = useState<'send' | 'rewrite' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const history = plan.revisions ?? []
+  const { refresh: refreshPatience } = usePatience()
 
   const send = async (rewrite = false) => {
     const feedback = rewrite ? text.trim() || 'Give me a different take on this timeline.' : text.trim()
@@ -30,6 +32,7 @@ export default function RevisePanel({ plan, onPlan }: { plan: DayPlan; onPlan: (
     try {
       const r = await api.revise(plan.date, feedback, scope || null, rewrite)
       onPlan(r.plan)
+      refreshPatience() // each revision costs a point
       setText('')
     } catch (e) {
       setError((e as Error).message)
@@ -105,6 +108,7 @@ export default function RevisePanel({ plan, onPlan }: { plan: DayPlan; onPlan: (
         </label>
       </div>
       {error && <p className="error small">{error}</p>}
+      <p className="muted small">Each revision costs 1 patience.</p>
       <div className="row-actions">
         <button className="btn primary" onClick={() => send()} disabled={busy !== null || !text.trim()}>
           {busy === 'send' ? 'Revising…' : 'Revise'}

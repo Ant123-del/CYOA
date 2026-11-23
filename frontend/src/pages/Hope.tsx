@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { HopeChain, KIND_META, ManifestationForm, blankManifestation } from '../components/Manifestations'
 import { StruggleMode } from '../components/Struggle'
+import { PatienceAccount } from '../components/Patience'
 import type { Manifestation, ManifestationInput, ManifestationKind } from '../types'
 
 export default function Hope() {
@@ -108,8 +109,8 @@ export default function Hope() {
         <div>
           <h1>Hope</h1>
           <p className="muted">
-            Accept what's in your head, answer it, then take one tiny step toward the life you're building. Before each choice on Today,
-            you'll check in with these.
+            Patience is the currency of hope, and hope is what you invest your patience in. Earn it by meeting your wants and needs, spend it
+            on what you push through. When a task gets hard, struggle mode brings back your manifestations.
           </p>
         </div>
       </div>
@@ -118,6 +119,7 @@ export default function Hope() {
           {error}
         </div>
       )}
+      <PatienceAccount />
       <HopeChain />
       <div className="struggle-card">
         <div>

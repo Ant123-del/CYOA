@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import { api } from './api'
+import { usePatience } from './patience'
 import type { SleepSummary } from '../types'
 
 interface SleepState {
@@ -23,6 +24,7 @@ export function SleepProvider({ children }: { children: ReactNode }) {
   const [sleep, setSleep] = useState<SleepSummary | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { refresh: refreshPatience } = usePatience()
 
   const refresh = useCallback(async () => {
     try {
@@ -49,6 +51,7 @@ export function SleepProvider({ children }: { children: ReactNode }) {
     setError(null)
     try {
       setSleep(await fn())
+      refreshPatience() // waking up, logging or deleting a sleep moves the balance
       return true
     } catch (e) {
       setError((e as Error).message)

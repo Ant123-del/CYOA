@@ -11,6 +11,7 @@ from ..auth import CurrentUser, current_user, get_user_settings
 from ..firebase import user_ref
 from ..models import Chapter, ChooseIn, DayPlan, MissedIn, Option
 from ..notifications import clear_reminder, rebuild_reminders
+from ..patience import remove_task
 from ..timeutil import local_dt, minutes_between, new_id, now_iso, tz
 
 log = logging.getLogger("cyoa.days")
@@ -223,4 +224,6 @@ def reset_choice(day: str, chapter_id: str, user: CurrentUser = Depends(current_
         except Exception:
             log.exception("Could not delete event")
     ch.chosenOptionId = ch.chosenAt = ch.scheduledEventId = ch.scheduledCalendarId = None
-    return save_day(user.uid, plan, settings)
+    saved = save_day(user.uid, plan, settings)
+    remove_task(user.uid, settings, day, chapter_id)  # refund what it was checked in at
+    return saved

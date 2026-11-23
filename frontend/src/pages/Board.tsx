@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../lib/api'
+import { useAuth } from '../lib/auth'
+import { TagPatienceEditor } from '../components/Patience'
 import type { Goal, GoalInput, GoalStatus, Priority } from '../types'
 
 const COLUMNS: { id: GoalStatus; title: string; hint: string }[] = [
@@ -30,6 +32,9 @@ export default function Board() {
   const [dragId, setDragId] = useState<string | null>(null)
   const [overCol, setOverCol] = useState<GoalStatus | null>(null)
   const [quickAdd, setQuickAdd] = useState<Record<string, string>>({})
+  const [tagPatience, setTagPatience] = useState(false)
+  const { settings, setSettings } = useAuth()
+  const allTags = useMemo(() => [...new Set(goals.flatMap((g) => g.tags))], [goals])
 
   useEffect(() => {
     api
@@ -101,9 +106,14 @@ export default function Board() {
           <h1>Quest board</h1>
           <p className="muted">Everything you want to do. The planner pulls from <b>To do</b> and <b>Doing</b>.</p>
         </div>
-        <button className="btn primary" onClick={() => setEditing({ id: null, data: blankGoal('todo') })}>
-          + New goal
-        </button>
+        <div className="head-actions">
+          <button className="btn ghost" onClick={() => setTagPatience(true)}>
+            ⏳ Patience by tag
+          </button>
+          <button className="btn primary" onClick={() => setEditing({ id: null, data: blankGoal('todo') })}>
+            + New goal
+          </button>
+        </div>
       </div>
       {error && (
         <div className="banner error" onClick={() => setError(null)}>
@@ -166,11 +176,15 @@ export default function Board() {
                         </span>
                       ) : null}
                       {g.dueDate ? <span className="tag">📅 {g.dueDate}</span> : null}
-                      {g.tags.map((t) => (
-                        <span key={t} className="tag subtle">
-                          #{t}
-                        </span>
-                      ))}
+                      {g.tags.map((t) => {
+                        const p = settings?.patienceTags?.[t]
+                        return (
+                          <span key={t} className="tag subtle" title={p ? (p.mode === 'parabola' ? 'Want or need' : 'Default patience') : undefined}>
+                            #{t}
+                            {p && <span className={p.points >= 0 ? 'emission' : 'absorption'}> {p.points > 0 ? '+' : ''}{p.points}{p.mode === 'parabola' ? '⌒' : ''}</span>}
+                          </span>
+                        )
+                      })}
                     </div>
                   </article>
                 ))}
@@ -191,6 +205,17 @@ export default function Board() {
             </section>
           ))}
         </div>
+      )}
+
+      {tagPatience && (
+        <TagPatienceEditor
+          tags={allTags}
+          initial={settings?.patienceTags ?? {}}
+          onClose={(saved) => {
+            setTagPatience(false)
+            if (saved && settings) setSettings({ ...settings, patienceTags: saved })
+          }}
+        />
       )}
 
       {editing && (

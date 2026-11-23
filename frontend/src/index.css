@@ -2992,3 +2992,224 @@ button.tmap-opt:hover:not(:disabled) {
     animation: none;
   }
 }
+
+/* ---------- patience: the currency of hope ---------- */
+.emission {
+  color: var(--yes);
+}
+.absorption {
+  color: var(--no);
+}
+.patience-pill {
+  background: color-mix(in srgb, var(--yes) 14%, transparent);
+  color: color-mix(in srgb, var(--yes) 75%, var(--text));
+  white-space: nowrap;
+}
+.patience-pill.debt {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  color: var(--danger);
+}
+.balance {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: color-mix(in srgb, var(--yes) 75%, var(--text));
+}
+.balance.debt {
+  color: var(--danger);
+}
+.patience-checkin {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.patience-checkin h2 {
+  margin: 0;
+  font-family: var(--display);
+}
+.points {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.points input {
+  width: 90px;
+  text-align: center;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+.points .icon-btn {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+}
+.points-word {
+  font-weight: 600;
+}
+.minutes-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.minutes-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.minutes-input input {
+  width: 100px;
+}
+.btn.danger:not(.ghost) {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+.patience-account.debt {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+}
+.patience-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+.patience-head h2 {
+  margin: 0 0 4px;
+}
+.patience-head p {
+  margin: 0;
+}
+.patience-total {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+.patience-big {
+  font-family: var(--display);
+  font-size: 2.4rem;
+  line-height: 1;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--yes) 80%, var(--text));
+}
+.patience-big.debt {
+  color: var(--danger);
+}
+.patience-log {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.patience-log-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.patience-log-row input:not(.points-small) {
+  flex: 1;
+  min-width: 160px;
+}
+.points-small {
+  width: 80px;
+}
+.ledger {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+.ledger ul {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+.ledger-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.ledger-label {
+  flex: 1;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.ledger-amount {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.icon-btn.small {
+  font-size: 1rem;
+  padding: 0 6px;
+}
+.head-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tag-patience {
+  max-width: 760px;
+}
+.tag-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.tag-row select {
+  width: auto;
+}
+.tag-row label.inline {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+.tag-row label.inline input {
+  width: 72px;
+}
+.tag-curve {
+  flex-basis: 100%;
+}
+.settle-btn {
+  background: color-mix(in srgb, var(--yes) 14%, transparent);
+  color: color-mix(in srgb, var(--yes) 75%, var(--text));
+  border-color: transparent;
+}
+.settle-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: default;
+}
+@media (max-width: 420px) {
+  .patience-head {
+    flex-direction: column;
+  }
+  .patience-total {
+    align-items: flex-start;
+  }
+}

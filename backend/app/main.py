@@ -9,7 +9,7 @@ from .config import get_settings
 from .firebase import init_firebase
 from .notifications import process_due_reminders
 from .plan_jobs import sweep_jobs
-from .routers import ai, days, goals, google, manifestations, me, sleep
+from .routers import ai, days, goals, google, manifestations, me, patience, sleep
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("cyoa")
@@ -40,7 +40,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for r in (me.router, goals.router, days.router, google.router, ai.router, sleep.router, manifestations.router):
+for r in (me.router, goals.router, days.router, google.router, ai.router, sleep.router, manifestations.router, patience.router):
     app.include_router(r)
 
 
